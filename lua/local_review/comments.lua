@@ -333,7 +333,10 @@ function M.clear_repo()
   end
 
   repo_state.data.comments = {}
-  storage.delete_repo(repo_state.repo_root)
+  local deleted = storage.delete_repo(repo_state.repo_root)
+  if not deleted then
+    storage.save_repo(repo_state.repo_root, repo_state.data)
+  end
   refresh_repo_buffers(repo_state.repo_root)
   notify("Cleared review comments for current repo.")
 end

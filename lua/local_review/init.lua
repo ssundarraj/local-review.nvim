@@ -3,7 +3,7 @@ local M = {}
 local defaults = {
   sign_name = "LocalReviewComment",
   sign_text = "●",
-  storage_dir = vim.fn.stdpath("state") .. "/local-review",
+  storage_dir = vim.fs.joinpath(vim.fn.stdpath("state"), "local-review"),
   keymaps = {},
 }
 

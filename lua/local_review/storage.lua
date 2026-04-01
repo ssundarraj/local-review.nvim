@@ -16,7 +16,6 @@ end
 
 function M.repo_file(repo_root)
   local base = opts().storage_dir
-  ensure_dir(base)
   return string.format("%s/%s.json", base, repo_key(repo_root))
 end
 
@@ -45,8 +44,10 @@ end
 function M.delete_repo(repo_root)
   local path = M.repo_file(repo_root)
   if vim.fn.filereadable(path) == 1 then
-    vim.fn.delete(path)
+    return vim.fn.delete(path) == 0
   end
+
+  return true
 end
 
 function M.for_current_repo()
