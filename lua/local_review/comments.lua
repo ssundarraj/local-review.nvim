@@ -334,6 +334,7 @@ function M.clear_repo()
   repo_state.data.comments = {}
   local deleted = storage.delete_repo(repo_state.repo_root)
   if not deleted then
+    -- Fallback, save empty comments
     storage.save_repo(repo_state.repo_root, repo_state.data)
   end
   refresh_repo_buffers(repo_state.repo_root)
