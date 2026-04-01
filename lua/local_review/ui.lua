@@ -148,9 +148,13 @@ function M.save_active()
   persist()
 end
 
+local function text_column_offset(winid)
+  return vim.fn.getwininfo(winid)[1].textoff
+end
+
 local function inline_dimensions(lines, source_winid)
   local win_width = vim.api.nvim_win_get_width(source_winid)
-  local max_width = math.min(120, math.max(60, win_width - 6))
+  local max_width = math.min(120, math.max(60, win_width - text_column_offset(source_winid)))
   local width = 60
   for _, line in ipairs(lines) do
     width = math.max(width, math.min(max_width, #line + 2))
@@ -260,7 +264,7 @@ function M.open_current_line()
     relative = "win",
     win = source_winid,
     row = vim.fn.winline(),
-    col = 2,
+    col = text_column_offset(source_winid),
     width = size.width,
     height = size.height,
     style = "minimal",
