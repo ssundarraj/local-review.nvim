@@ -36,8 +36,8 @@ Use your preferred plugin manager. Example with `lazy.nvim`:
 
 ```lua
 require("local_review").setup({
-  sign_name = "LocalReviewComment",
-  sign_text = "●",
+  marker_text = "●",
+  marker_hl = "DiagnosticHint",
   storage_dir = vim.fn.stdpath("state") .. "/local-review",
   keymaps = {
     comment = "<leader>rc",

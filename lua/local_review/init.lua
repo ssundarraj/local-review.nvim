@@ -1,8 +1,8 @@
 local M = {}
 
 local defaults = {
-  sign_name = "LocalReviewComment",
-  sign_text = "●",
+  marker_text = "●",
+  marker_hl = "DiagnosticHint",
   storage_dir = vim.fs.joinpath(vim.fn.stdpath("state"), "local-review"),
   keymaps = {},
 }
@@ -35,12 +35,11 @@ local function visual_safe_cmd(command_name)
 end
 
 local function refresh_current_buffer(bufnr)
-  require("local_review.signs").refresh(bufnr or vim.api.nvim_get_current_buf())
+  require("local_review.markers").refresh(bufnr or vim.api.nvim_get_current_buf())
 end
 
 function M.setup(opts)
   state.opts = vim.tbl_deep_extend("force", vim.deepcopy(defaults), opts or {})
-  require("local_review.signs").define(state.opts)
 
   if not state.configured then
     command("LocalReviewComment", function()

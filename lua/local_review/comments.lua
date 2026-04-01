@@ -29,14 +29,14 @@ local function current_line()
 end
 
 local function refresh_repo_buffers(repo_root)
-  local signs = require("local_review.signs")
+  local markers = require("local_review.markers")
   for _, bufnr in ipairs(vim.api.nvim_list_bufs()) do
     if vim.api.nvim_buf_is_loaded(bufnr) and vim.bo[bufnr].buftype == "" then
       local path = vim.api.nvim_buf_get_name(bufnr)
       if path ~= "" then
         local root = context.repo_root(path)
         if root == repo_root then
-          signs.refresh(bufnr)
+          markers.refresh(bufnr)
         end
       end
     end
