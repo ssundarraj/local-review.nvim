@@ -256,6 +256,19 @@ local function attach_editor_autocmds(bufnr, winid)
       end)
     end,
   })
+
+  vim.api.nvim_create_autocmd("WinLeave", {
+    group = group,
+    callback = function()
+      if not is_valid_window(winid) or vim.api.nvim_get_current_win() ~= winid or state.closing then
+        return
+      end
+
+      vim.schedule(function()
+        M.close_active()
+      end)
+    end,
+  })
 end
 
 function M.open_current_line()
