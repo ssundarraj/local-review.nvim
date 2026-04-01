@@ -1,14 +1,16 @@
 # local-review.nvim
 
-Local review comments for Neovim, exported as plain-text feedback for coding agents.
+Neovim plugin for local code review, built for use with coding agents.
 
 ## Features
 
-- Open an editable review comment float for the current line
-- Delete or reopen the current line's comment
-- Navigate to the next or previous commented line in the current buffer
-- Persist comments per Git repository under Neovim state
-- Export all comments for the current repo into a scratch buffer
+Add, edit and delete comments on lines of code. Use your existing diff-viewer for diffs.
+
+![Comment UI](./screenshots/comment_ui.png)
+
+Ships with a [skill](./skills/local-review/SKILL.md) that tells agents how to read comments.
+
+![Review Skill](./screenshots/skill_claude.png)
 
 ## Installation
 
@@ -16,40 +18,24 @@ Use your preferred plugin manager. Example with `lazy.nvim`:
 
 ```lua
 {
-  dir = "~/dev/local-review.nvim",
+  "ssundarraj/local-review.nvim",
   config = function()
-    require("local_review").setup()
+    require("local_review").setup({
+      marker_text = "●",
+      marker_hl = "DiagnosticHint",
+      keymaps = {
+        comment = "<leader>rc",
+        delete = "<leader>rd",
+        next = "]r",
+        prev = "[r",
+        export = "<leader>re",
+      },
+    })
   end,
 }
 ```
 
-## Commands
-
-- `:LocalReviewComment`
-- `:LocalReviewDelete`
-- `:LocalReviewNext`
-- `:LocalReviewPrev`
-- `:LocalReviewExport`
-- `:LocalReviewClearRepo`
-
-## Configuration
-
-```lua
-require("local_review").setup({
-  marker_text = "●",
-  marker_hl = "DiagnosticHint",
-  storage_dir = vim.fn.stdpath("state") .. "/local-review",
-  keymaps = {
-    comment = "<leader>rc",
-    delete = "<leader>rd",
-    next = "]r",
-    prev = "[r",
-    export = "<leader>re",
-  },
-})
-```
-
-## Telescope
+### Telescope
 
 If you use Telescope, you can open a picker for all review comments in the current repo:
 
@@ -58,3 +44,17 @@ vim.keymap.set("n", "<leader>lr", function()
   require("local_review.telescope").comments()
 end, { desc = "Local Review Picker" })
 ```
+
+## Commands
+
+- `:LocalReviewComment` open the comment editor for the current line
+- `:LocalReviewDelete` delete the comment on the current line
+- `:LocalReviewNext` jump to the next review comment in the current file
+- `:LocalReviewPrev` jump to the previous review comment in the current file
+- `:LocalReviewExport` print all review comments for the current repository in a copy/paste-friendly format.
+- `:LocalReviewClearRepo` delete all stored review comments for the current repository.
+
+## Notes
+
+- This was largely vibe-coded. There is likely some poor code and you may find bugs.
+- Issues/PRs welcome but please open an issue before making a large change.
