@@ -48,3 +48,13 @@ require("local_review").setup({
   },
 })
 ```
+
+## Telescope
+
+If you use Telescope, you can open a picker for all review comments in the current repo:
+
+```lua
+vim.keymap.set("n", "<leader>lr", function()
+  require("local_review.telescope").comments()
+end, { desc = "Local Review Picker" })
+```
