@@ -193,7 +193,12 @@ function M.upsert_line_comment(line_state, body)
     return nil, "Comment cannot be empty."
   end
 
-  local _, updated = upsert_comment(line_state.repo_state, line_state.ctx, line_state.comment and line_state.comment.line or line_state.ctx.line or current_line(), trimmed)
+  local _, updated = upsert_comment(
+    line_state.repo_state,
+    line_state.ctx,
+    line_state.comment and line_state.comment.line or line_state.ctx.line or current_line(),
+    trimmed
+  )
   storage.save_repo(line_state.ctx.repo_root, line_state.repo_state.data)
   refresh_repo_buffers(line_state.ctx.repo_root)
   return updated and "updated" or "created"
