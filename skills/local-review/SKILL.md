@@ -7,9 +7,7 @@ description: Use this skill when you need to read or clear local-review.nvim com
 
 Use this skill when the user asks to read, export, inspect, or clear `local-review.nvim` comments.
 
-Run commands from the target repository root.
-
-Assume the plugin is already installed in the user's normal Neovim setup.
+Run commands from the target repository root. Assume the plugin is already installed in the user's normal Neovim setup.
 
 ## Read comments
 
@@ -25,9 +23,16 @@ nvim --headless '+LocalReviewClearRepo' \
   +qa
 ```
 
-Don't clear without the user asking. 
+## Usage
 
-Once you export, you can ask the user if we can clear the comments.
+If the user invokes the skill without any additional instructions, do the following:
+
+1. Read the comments.
+2. Generate a plan to address them. Get this approved by the user.
+3. Make changes to the code.
+4. Ask the user if they want to clear the comments and then clear them.
+
+## Notes
 
 Export before clearing unless the user explicitly asks to delete first.
 
