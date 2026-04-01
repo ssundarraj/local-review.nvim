@@ -268,7 +268,9 @@ function M.open_current_line()
     width = size.width,
     height = size.height,
     style = "minimal",
-    border = "none",
+    border = "rounded",
+    title = " Review Comment ",
+    title_pos = "left",
     noautocmd = true,
   })
 
