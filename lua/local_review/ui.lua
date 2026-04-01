@@ -2,13 +2,18 @@ local M = {}
 
 local comments = require("local_review.comments")
 
+local namespace = vim.api.nvim_create_namespace("local-review-ui")
+local placeholder_namespace = vim.api.nvim_create_namespace("local-review-ui-placeholder")
+local placeholder_text = "Write a review comment..."
+
 local state = {
-  bufnr = nil,
-  winid = nil,
+  editor_bufnr = nil,
+  editor_winid = nil,
   source_bufnr = nil,
+  source_winid = nil,
   source_line = nil,
+  extmark_id = nil,
   initial_body = "",
-  augroup = nil,
   closing = false,
 }
 
@@ -21,15 +26,23 @@ local function is_valid_window(winid)
 end
 
 local function is_open()
-  return is_valid_buffer(state.bufnr) and is_valid_window(state.winid)
+  return is_valid_buffer(state.editor_bufnr) and is_valid_window(state.editor_winid)
+end
+
+local function body_lines(body)
+  local text = body or ""
+  if text == "" then
+    return { "" }
+  end
+  return vim.split(text, "\n", { plain = true })
 end
 
 local function current_body()
-  if not is_valid_buffer(state.bufnr) then
+  if not is_valid_buffer(state.editor_bufnr) then
     return ""
   end
 
-  return vim.trim(table.concat(vim.api.nvim_buf_get_lines(state.bufnr, 0, -1, false), "\n"))
+  return vim.trim(table.concat(vim.api.nvim_buf_get_lines(state.editor_bufnr, 0, -1, false), "\n"))
 end
 
 local function is_dirty()
@@ -40,19 +53,47 @@ local function notify(message, level)
   vim.notify(message, level or vim.log.levels.INFO)
 end
 
+local function update_placeholder(bufnr)
+  if not is_valid_buffer(bufnr) then
+    return
+  end
+
+  vim.api.nvim_buf_clear_namespace(bufnr, placeholder_namespace, 0, -1)
+
+  local lines = vim.api.nvim_buf_get_lines(bufnr, 0, -1, false)
+  local has_content = vim.trim(table.concat(lines, "\n")) ~= ""
+  if has_content then
+    return
+  end
+
+  vim.api.nvim_buf_set_extmark(bufnr, placeholder_namespace, 0, 0, {
+    virt_text = { { placeholder_text, "Comment" } },
+    virt_text_pos = "overlay",
+    hl_mode = "combine",
+  })
+end
+
+local function clear_inline_space()
+  if is_valid_buffer(state.source_bufnr) and state.extmark_id ~= nil then
+    pcall(vim.api.nvim_buf_del_extmark, state.source_bufnr, namespace, state.extmark_id)
+  end
+  state.extmark_id = nil
+end
+
 local function cleanup()
-  state.bufnr = nil
-  state.winid = nil
+  clear_inline_space()
+  state.editor_bufnr = nil
+  state.editor_winid = nil
   state.source_bufnr = nil
+  state.source_winid = nil
   state.source_line = nil
   state.initial_body = ""
-  state.augroup = nil
   state.closing = false
 end
 
 local function close_window()
-  if is_valid_window(state.winid) then
-    pcall(vim.api.nvim_win_close, state.winid, true)
+  if is_valid_window(state.editor_winid) then
+    pcall(vim.api.nvim_win_close, state.editor_winid, true)
   end
   cleanup()
 end
@@ -78,13 +119,13 @@ local function persist(opts)
   end
 
   state.initial_body = current_body()
-  if is_valid_buffer(state.bufnr) then
-    vim.bo[state.bufnr].modified = false
+  if is_valid_buffer(state.editor_bufnr) then
+    vim.bo[state.editor_bufnr].modified = false
   end
   return true
 end
 
-function M.close_active(opts)
+function M.close_active()
   if not is_open() then
     cleanup()
     return true
@@ -107,43 +148,58 @@ function M.save_active()
   persist()
 end
 
-local function float_size(body)
-  local lines = vim.split(body == "" and " " or body, "\n", { plain = true })
+local function inline_dimensions(lines, source_winid)
+  local win_width = vim.api.nvim_win_get_width(source_winid)
+  local max_width = math.min(120, math.max(60, win_width - 6))
   local width = 60
   for _, line in ipairs(lines) do
-    width = math.max(width, math.min(120, #line + 4))
+    width = math.max(width, math.min(max_width, #line + 2))
   end
 
-  local max_width = math.min(120, math.max(60, math.floor(vim.o.columns * 0.9)))
-  local max_height = math.max(8, vim.o.lines - 8)
+  local available_height = math.max(4, vim.api.nvim_win_get_height(source_winid) - vim.fn.winline() - 2)
+  local height = math.min(math.max(3, #lines), available_height)
+
   return {
-    width = math.min(width, max_width),
-    height = math.min(math.max(8, #lines + 2), max_height),
+    width = width,
+    height = height,
   }
 end
 
-local function set_float_keymaps(bufnr)
+local function reserve_inline_space(bufnr, line, height)
+  local virt_lines = {}
+  for _ = 1, height do
+    virt_lines[#virt_lines + 1] = { { " ", "Normal" } }
+  end
+
+  state.extmark_id = vim.api.nvim_buf_set_extmark(bufnr, namespace, line - 1, 0, {
+    virt_lines = virt_lines,
+    virt_lines_leftcol = true,
+    hl_mode = "combine",
+  })
+end
+
+local function set_editor_keymaps(bufnr)
   local function map(modes, lhs, rhs, desc)
     vim.keymap.set(modes, lhs, rhs, { buffer = bufnr, silent = true, nowait = true, desc = desc })
   end
 
-  map({ "n", "i" }, "<C-s>", function()
-    M.save_active()
-  end, "Local Review: Save")
+  map({ "n", "i" }, "<C-c>", function()
+    M.close_active()
+  end, "Local Review: Close")
 
   map("n", "q", function()
     M.close_active()
   end, "Local Review: Close")
 end
 
-local function attach_lifecycle_autocmds(bufnr, winid)
-  local group = vim.api.nvim_create_augroup("local-review-float-" .. bufnr, { clear = true })
-  state.augroup = group
+local function attach_editor_autocmds(bufnr, winid)
+  local group = vim.api.nvim_create_augroup("local-review-inline-" .. bufnr, { clear = true })
 
-  vim.api.nvim_create_autocmd("BufWriteCmd", {
+  vim.api.nvim_create_autocmd({ "TextChanged", "TextChangedI", "InsertLeave", "BufEnter" }, {
+    group = group,
     buffer = bufnr,
     callback = function()
-      persist()
+      update_placeholder(bufnr)
     end,
   })
 
@@ -159,13 +215,9 @@ local function attach_lifecycle_autocmds(bufnr, winid)
         return
       end
 
-      if is_dirty() then
-        vim.schedule(function()
-          M.close_active()
-        end)
-      else
-        cleanup()
-      end
+      vim.schedule(function()
+        M.close_active()
+      end)
     end,
   })
 end
@@ -176,48 +228,58 @@ function M.open_current_line()
   end
 
   local source_bufnr = vim.api.nvim_get_current_buf()
-  local source_line = vim.api.nvim_win_get_cursor(0)[1]
+  local source_winid = vim.api.nvim_get_current_win()
+  local source_line = vim.api.nvim_win_get_cursor(source_winid)[1]
   local line_state = comments.get_line_state(source_bufnr, source_line)
   if not line_state then
     return
   end
 
-  local body = line_state.comment and line_state.comment.body or ""
-  local size = float_size(body)
+  local lines = body_lines(line_state.comment and line_state.comment.body or "")
+  local size = inline_dimensions(lines, source_winid)
   local bufnr = vim.api.nvim_create_buf(false, true)
 
-  vim.bo[bufnr].buftype = "acwrite"
+  vim.bo[bufnr].buftype = "nofile"
   vim.bo[bufnr].bufhidden = "wipe"
   vim.bo[bufnr].swapfile = false
   vim.bo[bufnr].modifiable = true
   vim.bo[bufnr].filetype = "markdown"
 
-  vim.api.nvim_buf_set_lines(bufnr, 0, -1, false, body == "" and { "" } or vim.split(body, "\n", { plain = true }))
+  vim.api.nvim_buf_set_lines(bufnr, 0, -1, false, lines)
+
+  state.editor_bufnr = bufnr
+  state.source_bufnr = source_bufnr
+  state.source_winid = source_winid
+  state.source_line = source_line
+  state.initial_body = table.concat(lines, "\n")
+  state.closing = false
+
+  reserve_inline_space(source_bufnr, source_line, size.height)
 
   local winid = vim.api.nvim_open_win(bufnr, true, {
-    relative = "editor",
-    row = math.max(1, math.floor((vim.o.lines - size.height) / 2) - 1),
-    col = math.max(0, math.floor((vim.o.columns - size.width) / 2)),
+    relative = "win",
+    win = source_winid,
+    row = vim.fn.winline(),
+    col = 2,
     width = size.width,
     height = size.height,
     style = "minimal",
-    border = "rounded",
-    title = " Review Comment ",
-    title_pos = "center",
+    border = "none",
+    noautocmd = true,
   })
 
-  state.bufnr = bufnr
-  state.winid = winid
-  state.source_bufnr = source_bufnr
-  state.source_line = source_line
-  state.initial_body = body
-  state.closing = false
+  state.editor_winid = winid
 
   vim.wo[winid].wrap = true
   vim.wo[winid].linebreak = true
+  vim.wo[winid].number = false
+  vim.wo[winid].relativenumber = false
+  vim.wo[winid].signcolumn = "no"
+  vim.wo[winid].winhighlight = "Normal:NormalFloat,FloatBorder:FloatBorder"
 
-  set_float_keymaps(bufnr)
-  attach_lifecycle_autocmds(bufnr, winid)
+  set_editor_keymaps(bufnr)
+  attach_editor_autocmds(bufnr, winid)
+  update_placeholder(bufnr)
 end
 
 return M
