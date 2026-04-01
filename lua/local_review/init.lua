@@ -51,10 +51,6 @@ function M.setup(opts)
       require("local_review.comments").delete_current_line()
     end, {})
 
-    command("LocalReviewShow", function()
-      require("local_review.ui").open_current_line()
-    end, {})
-
     command("LocalReviewNext", function()
       require("local_review.comments").jump(1)
     end, {})
@@ -83,7 +79,6 @@ function M.setup(opts)
 
   map({ "n", "x" }, state.opts.keymaps.comment, visual_safe_cmd("LocalReviewComment"), "Local Review: Comment")
   map({ "n", "x" }, state.opts.keymaps.delete, visual_safe_cmd("LocalReviewDelete"), "Local Review: Delete")
-  map({ "n", "x" }, state.opts.keymaps.show, visual_safe_cmd("LocalReviewShow"), "Local Review: Show")
   map({ "n", "x" }, state.opts.keymaps.next, visual_safe_cmd("LocalReviewNext"), "Local Review: Next")
   map({ "n", "x" }, state.opts.keymaps.prev, visual_safe_cmd("LocalReviewPrev"), "Local Review: Prev")
   map({ "n", "x" }, state.opts.keymaps.export, visual_safe_cmd("LocalReviewExport"), "Local Review: Export")

@@ -292,20 +292,6 @@ function M.delete_current_line()
   notify("Review comment deleted.")
 end
 
-function M.show_current_line()
-  local result = find_current_comment()
-  if not result then
-    return
-  end
-
-  if result.comment == nil then
-    notify("No review comment on the current line.", vim.log.levels.INFO)
-    return
-  end
-
-  notify(string.format("%s:%d\n%s", result.ctx.relative_path, result.comment.line, result.comment.body))
-end
-
 function M.jump(direction)
   local comments = M.comments_for_buffer(0)
   if #comments == 0 then

@@ -8,7 +8,6 @@ Local review comments for Neovim, exported as plain-text feedback for coding age
 - Delete or reopen the current line's comment
 - Navigate to the next or previous commented line in the current buffer
 - Persist comments per Git repository under Neovim state
-- Show commented lines with signs
 - Export all comments for the current repo into a scratch buffer
 
 ## Installation
@@ -28,7 +27,6 @@ Use your preferred plugin manager. Example with `lazy.nvim`:
 
 - `:LocalReviewComment`
 - `:LocalReviewDelete`
-- `:LocalReviewShow`
 - `:LocalReviewNext`
 - `:LocalReviewPrev`
 - `:LocalReviewExport`
@@ -44,7 +42,6 @@ require("local_review").setup({
   keymaps = {
     comment = "<leader>rc",
     delete = "<leader>rd",
-    show = "<leader>rs",
     next = "]r",
     prev = "[r",
     export = "<leader>re",
