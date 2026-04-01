@@ -12,8 +12,10 @@ local state = {
   source_bufnr = nil,
   source_winid = nil,
   source_line = nil,
+  anchor_row = nil,
   extmark_id = nil,
   initial_body = "",
+  reserved_height = 0,
   closing = false,
 }
 
@@ -87,7 +89,9 @@ local function cleanup()
   state.source_bufnr = nil
   state.source_winid = nil
   state.source_line = nil
+  state.anchor_row = nil
   state.initial_body = ""
+  state.reserved_height = 0
   state.closing = false
 end
 
@@ -152,7 +156,7 @@ local function text_column_offset(winid)
   return vim.fn.getwininfo(winid)[1].textoff
 end
 
-local function inline_dimensions(lines, source_winid)
+local function inline_dimensions(lines, source_winid, anchor_row)
   local win_width = vim.api.nvim_win_get_width(source_winid)
   local max_width = math.min(120, math.max(60, win_width - text_column_offset(source_winid)))
   local width = 60
@@ -160,7 +164,8 @@ local function inline_dimensions(lines, source_winid)
     width = math.max(width, math.min(max_width, #line + 2))
   end
 
-  local available_height = math.max(4, vim.api.nvim_win_get_height(source_winid) - vim.fn.winline() - 2)
+  local row = anchor_row or (vim.fn.winline() + 1)
+  local available_height = math.max(6, vim.api.nvim_win_get_height(source_winid) - row - 1)
   local height = math.min(math.max(3, #lines), available_height)
 
   return {
@@ -179,6 +184,32 @@ local function reserve_inline_space(bufnr, line, height)
     virt_lines = virt_lines,
     virt_lines_leftcol = true,
     hl_mode = "combine",
+  })
+  state.reserved_height = height
+end
+
+local function update_layout()
+  if not is_open() or not is_valid_window(state.source_winid) or state.source_line == nil then
+    return
+  end
+
+  local size = inline_dimensions(
+    vim.api.nvim_buf_get_lines(state.editor_bufnr, 0, -1, false),
+    state.source_winid,
+    state.anchor_row
+  )
+  local reserved_height = size.height + 3
+
+  clear_inline_space()
+  reserve_inline_space(state.source_bufnr, state.source_line, reserved_height)
+
+  vim.api.nvim_win_set_config(state.editor_winid, {
+    relative = "win",
+    win = state.source_winid,
+    row = state.anchor_row or (vim.fn.winline() + 1),
+    col = text_column_offset(state.source_winid) + 1,
+    width = size.width,
+    height = size.height,
   })
 end
 
@@ -204,6 +235,7 @@ local function attach_editor_autocmds(bufnr, winid)
     buffer = bufnr,
     callback = function()
       update_placeholder(bufnr)
+      update_layout()
     end,
   })
 
@@ -240,7 +272,7 @@ function M.open_current_line()
   end
 
   local lines = body_lines(line_state.comment and line_state.comment.body or "")
-  local size = inline_dimensions(lines, source_winid)
+  local size = inline_dimensions(lines, source_winid, state.anchor_row)
   local bufnr = vim.api.nvim_create_buf(false, true)
 
   vim.bo[bufnr].buftype = "nofile"
@@ -255,16 +287,19 @@ function M.open_current_line()
   state.source_bufnr = source_bufnr
   state.source_winid = source_winid
   state.source_line = source_line
+  state.anchor_row = vim.fn.winline() + 1
   state.initial_body = table.concat(lines, "\n")
+  state.reserved_height = 0
   state.closing = false
 
-  reserve_inline_space(source_bufnr, source_line, size.height)
+  size = inline_dimensions(lines, source_winid, state.anchor_row)
+  reserve_inline_space(source_bufnr, source_line, size.height + 3)
 
   local winid = vim.api.nvim_open_win(bufnr, true, {
     relative = "win",
     win = source_winid,
-    row = vim.fn.winline(),
-    col = text_column_offset(source_winid),
+    row = state.anchor_row,
+    col = text_column_offset(source_winid) + 1,
     width = size.width,
     height = size.height,
     style = "minimal",
