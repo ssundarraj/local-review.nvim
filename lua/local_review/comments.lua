@@ -205,7 +205,7 @@ function M.upsert_line_comment(line_state, body)
   local _, updated = upsert_comment(
     line_state.repo_state,
     line_state.ctx,
-    line_state.comment and line_state.comment.line or line_state.ctx.line or current_line(),
+    line_state.comment and line_state.comment.line or current_line(),
     trimmed
   )
   local ok, err = persist_repo_state(line_state.ctx.repo_root, line_state.repo_state.data)

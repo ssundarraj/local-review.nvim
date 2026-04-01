@@ -40,7 +40,7 @@ function M.relative_path(repo_root, absolute_path)
     return path:sub(#prefix + 1)
   end
 
-  return vim.fn.fnamemodify(path, ":t")
+  return nil, string.format("Path is outside the repository root: %s", path)
 end
 
 function M.comment_context(bufnr)
@@ -54,10 +54,15 @@ function M.comment_context(bufnr)
     return nil, repo_err
   end
 
+  local relative_path, relative_err = M.relative_path(repo_root, absolute_path)
+  if not relative_path then
+    return nil, relative_err
+  end
+
   return {
     absolute_path = absolute_path,
     repo_root = repo_root,
-    relative_path = M.relative_path(repo_root, absolute_path),
+    relative_path = relative_path,
     bufnr = bufnr or 0,
   }
 end

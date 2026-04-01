@@ -25,8 +25,8 @@ local function telescope_modules()
   }
 end
 
-local function entry_displayer()
-  return require("telescope.pickers.entry_display").create({
+local function entry_displayer(entry_display)
+  return entry_display.create({
     separator = " ",
     items = {
       { width = 40 },
@@ -113,7 +113,7 @@ function M.comments(opts)
   end
 
   opts = opts or {}
-  local displayer = entry_displayer()
+  local displayer = entry_displayer(modules.entry_display)
 
   modules.pickers
     .new(opts, {
