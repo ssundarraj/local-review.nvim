@@ -101,24 +101,41 @@ local function select_candidate(anchor, lines, matches)
 
   local best_line
   local best_score = -1
-  local duplicate_best = false
 
   for _, line in ipairs(matches) do
     local score = context_score(anchor, lines, line)
     if score > best_score then
       best_line = line
       best_score = score
-      duplicate_best = false
-    elseif score == best_score then
-      duplicate_best = true
     end
   end
 
-  if duplicate_best or best_score <= 0 then
+  if best_score <= 0 then
     return nil
   end
 
-  return best_line
+  local nearest_line = best_line
+  local nearest_distance = math.abs(best_line - anchor.line_number)
+  local duplicate_nearest = false
+
+  for _, line in ipairs(matches) do
+    if context_score(anchor, lines, line) == best_score then
+      local distance = math.abs(line - anchor.line_number)
+      if distance < nearest_distance then
+        nearest_line = line
+        nearest_distance = distance
+        duplicate_nearest = false
+      elseif distance == nearest_distance and line ~= nearest_line then
+        duplicate_nearest = true
+      end
+    end
+  end
+
+  if duplicate_nearest then
+    return nil
+  end
+
+  return nearest_line
 end
 
 ---@class LineAnchor

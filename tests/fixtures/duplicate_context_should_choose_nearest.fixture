@@ -1,0 +1,40 @@
+--- file_before
+x1
+x2
+before1
+before2
+target
+after1
+after2
+sep1
+sep2
+sep3
+before1
+before2
+target
+after1
+after2
+y1
+y2
+--- file_after
+x1
+x2
+before1
+before2
+target
+after1
+after2
+sep1
+sep2
+sep3
+inserted
+before1
+before2
+target
+after1
+after2
+y1
+y2
+--- assertions
+before_line: 13
+resolved_after_line: 14
