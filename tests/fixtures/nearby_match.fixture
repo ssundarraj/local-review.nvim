@@ -1,0 +1,14 @@
+--- file_before
+alpha
+beta
+gamma
+delta
+--- file_after
+alpha
+inserted
+beta
+gamma
+delta
+--- assertions
+before_line: 2
+resolved_after_line: 3

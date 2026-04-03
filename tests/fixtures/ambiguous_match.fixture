@@ -1,0 +1,12 @@
+--- file_before
+before
+target
+after
+--- file_after
+target
+x
+target
+y
+--- assertions
+before_line: 2
+resolved_after_line: nil

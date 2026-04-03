@@ -1,0 +1,32 @@
+--- file_before
+top
+target
+bottom
+--- file_after
+top
+pad1
+pad2
+pad3
+pad4
+pad5
+pad6
+pad7
+pad8
+pad9
+pad10
+pad11
+pad12
+pad13
+pad14
+pad15
+pad16
+pad17
+pad18
+pad19
+pad20
+pad21
+target
+bottom
+--- assertions
+before_line: 2
+resolved_after_line: 23
