@@ -5,25 +5,17 @@ local M = {}
 ---@field repo_root string
 ---@field absolute_path string
 ---@field relative_path string
----@field line integer
 ---@field body string
 ---@field created_at string
 ---@field updated_at string
 ---@field source_kind string
 ---@field source_meta table
 ---@field stale boolean
----@field anchor_line_text string?
----@field anchor_line_text_normalized string?
----@field before_context string[]?
----@field before_context_normalized string[]?
----@field after_context string[]?
----@field after_context_normalized string[]?
+---@field anchor LineAnchor
 
 local context = require("local_review.context")
+local positioning = require("local_review.positioning")
 local storage = require("local_review.storage")
-
-local anchor_context_radius = 2
-local nearby_search_radius = 20
 
 local state = {
   file_fingerprints = {},
@@ -38,91 +30,23 @@ local function hrtime()
   return vim.uv.hrtime()
 end
 
----@param text string
----@return string
-local function normalize_text(text)
-  return vim.trim(text:gsub("%s+", " "))
-end
-
----@param lines string[]
----@return integer
-local function line_count(lines)
-  return math.max(#lines, 1)
-end
-
 ---@param bufnr integer
 ---@return string[]
 local function buffer_lines(bufnr)
   return vim.api.nvim_buf_get_lines(bufnr, 0, -1, false)
 end
 
----@param lines string[]
----@param line integer
----@return string
-local function line_at(lines, line)
-  if line < 1 or line > #lines then
-    return ""
-  end
-  return lines[line]
-end
-
----@param lines string[]
----@param start_line integer
----@param end_line integer
----@return string[]
-local function lines_in_range(lines, start_line, end_line)
-  local selected_lines = {}
-  for line = start_line, end_line do
-    if line >= 1 and line <= #lines then
-      selected_lines[#selected_lines + 1] = lines[line]
-    end
-  end
-  return selected_lines
-end
-
----@param lines string[]
----@return string[]
-local function normalized_lines(lines)
-  local normalized = {}
-  for _, value in ipairs(lines) do
-    normalized[#normalized + 1] = normalize_text(value)
-  end
-  return normalized
-end
-
----@param lines string[]
----@param line integer
----@return table
-local function anchor_for_line(lines, line)
-  local before = lines_in_range(lines, line - anchor_context_radius, line - 1)
-  local after = lines_in_range(lines, line + 1, line + anchor_context_radius)
-  return {
-    anchor_line_text = line_at(lines, line),
-    anchor_line_text_normalized = normalize_text(line_at(lines, line)),
-    before_context = before,
-    before_context_normalized = normalized_lines(before),
-    after_context = after,
-    after_context_normalized = normalized_lines(after),
-  }
-end
-
----@param comment table
+---@param comment LocalReviewComment
 ---@param lines string[]
 ---@param line integer
 local function apply_anchor(comment, lines, line)
-  local anchor = anchor_for_line(lines, line)
-  comment.line = line
-  comment.anchor_line_text = anchor.anchor_line_text
-  comment.anchor_line_text_normalized = anchor.anchor_line_text_normalized
-  comment.before_context = anchor.before_context
-  comment.before_context_normalized = anchor.before_context_normalized
-  comment.after_context = anchor.after_context
-  comment.after_context_normalized = anchor.after_context_normalized
+  comment.anchor = positioning.capture(lines, line)
   comment.stale = false
 end
 
+---@param comment LocalReviewComment
 local function ensure_comment_defaults(comment)
-  if comment.id == nil or comment.id == "" then
+  if comment.id == "" then
     comment.id = tostring(hrtime())
   end
   if comment.stale == nil then
@@ -172,8 +96,8 @@ local function comment_sorter(a, b)
   if a.relative_path ~= b.relative_path then
     return a.relative_path < b.relative_path
   end
-  if a.line ~= b.line then
-    return a.line < b.line
+  if a.anchor.line_number ~= b.anchor.line_number then
+    return a.anchor.line_number < b.anchor.line_number
   end
   return (a.created_at or "") < (b.created_at or "")
 end
@@ -184,122 +108,54 @@ local function buffer_fingerprint(lines)
   return vim.fn.sha256(table.concat(lines, "\n"))
 end
 
----@param comment table
+---@param comment LocalReviewComment
 ---@param lines string[]
----@param line integer
----@return integer
-local function context_score(comment, lines, line)
-  local score = 0
-  local before = comment.before_context_normalized or {}
-  local after = comment.after_context_normalized or {}
-
-  for index, value in ipairs(before) do
-    local candidate_line = line - (#before - index + 1)
-    if normalize_text(line_at(lines, candidate_line)) == value then
-      score = score + 1
-    end
-  end
-
-  for index, value in ipairs(after) do
-    local candidate_line = line + index
-    if normalize_text(line_at(lines, candidate_line)) == value then
-      score = score + 1
-    end
-  end
-
-  return score
-end
-
----@param lines string[]
----@param target string
----@param start_line integer
----@param end_line integer
----@return integer[]
-local function candidate_lines(lines, target, start_line, end_line)
-  local matches = {}
-  for line = start_line, end_line do
-    if normalize_text(line_at(lines, line)) == target then
-      matches[#matches + 1] = line
-    end
-  end
-  return matches
-end
-
----@param comment table
----@param lines string[]
----@param matches integer[]
----@return integer|nil
-local function select_candidate(comment, lines, matches)
-  if #matches == 0 then
-    return nil
-  end
-
-  if #matches == 1 then
-    return matches[1]
-  end
-
-  local best_line
-  local best_score = -1
-  local duplicate_best = false
-
-  for _, line in ipairs(matches) do
-    local score = context_score(comment, lines, line)
-    if score > best_score then
-      best_line = line
-      best_score = score
-      duplicate_best = false
-    elseif score == best_score then
-      duplicate_best = true
-    end
-  end
-
-  if duplicate_best or best_score <= 0 then
-    return nil
-  end
-
-  return best_line
-end
-
+---@return boolean
 local function reconcile_comment(comment, lines)
   ensure_comment_defaults(comment)
 
-  local max_line = line_count(lines)
-  local stored_line = math.max(1, math.min(comment.line or 1, max_line))
-  local target = comment.anchor_line_text_normalized or normalize_text(comment.anchor_line_text)
-
-  if target == "" then
-    apply_anchor(comment, lines, stored_line)
-    return true
-  end
-
-  if normalize_text(line_at(lines, stored_line)) == target then
-    local was_stale = comment.stale
-    apply_anchor(comment, lines, stored_line)
-    return was_stale or false
-  end
-
-  local start_line = math.max(1, stored_line - nearby_search_radius)
-  local end_line = math.min(max_line, stored_line + nearby_search_radius)
-  local matches = candidate_lines(lines, target, start_line, end_line)
-  local resolved = select_candidate(comment, lines, matches)
-
+  local resolved = positioning.resolve(comment.anchor, lines)
   if not resolved then
-    matches = candidate_lines(lines, target, 1, max_line)
-    resolved = select_candidate(comment, lines, matches)
+    if not comment.stale then
+      comment.stale = true
+      return true
+    end
+    return false
   end
 
-  if resolved then
-    local moved = comment.line ~= resolved or comment.stale
+  if comment.anchor.line_number == resolved and not comment.stale then
     apply_anchor(comment, lines, resolved)
-    return moved
+    return false
   end
 
-  if not comment.stale then
-    comment.stale = true
-    return true
-  end
+  local moved = comment.anchor.line_number ~= resolved or comment.stale
+  apply_anchor(comment, lines, resolved)
+  return moved
+end
 
-  return false
+local function clamp_line(line, lines)
+  local max_line = math.max(#lines, 1)
+  return math.max(1, math.min(line, max_line))
+end
+
+local function find_comment_at_line(comments, relative_path, line)
+  for _, comment in ipairs(comments) do
+    ensure_comment_defaults(comment)
+    if comment.relative_path == relative_path and comment.anchor.line_number == line then
+      return comment
+    end
+  end
+  return nil
+end
+
+local function find_comment_entry_at_line(comments, relative_path, line)
+  for index, comment in ipairs(comments) do
+    ensure_comment_defaults(comment)
+    if comment.relative_path == relative_path and comment.anchor.line_number == line then
+      return comment, index
+    end
+  end
+  return nil, nil
 end
 
 local function reconcile_buffer_state(bufnr, repo_state, ctx)
@@ -355,24 +211,17 @@ end
 ---@return LocalReviewComment, boolean
 local function upsert_comment(repo_state, ctx, line, body)
   local comments = repo_state.data.comments
-  local existing
-
-  for _, comment in ipairs(comments) do
-    ensure_comment_defaults(comment)
-    if comment.relative_path == ctx.relative_path and comment.line == line then
-      existing = comment
-      break
-    end
-  end
+  local existing = find_comment_at_line(comments, ctx.relative_path, line)
 
   local timestamp = now()
   local lines = buffer_lines(ctx.bufnr)
+  local resolved_line = clamp_line(line, lines)
   if existing then
     existing.body = body
     existing.updated_at = timestamp
     existing.absolute_path = ctx.absolute_path
     existing.repo_root = ctx.repo_root
-    apply_anchor(existing, lines, line)
+    apply_anchor(existing, lines, resolved_line)
     return existing, true
   end
 
@@ -383,7 +232,6 @@ local function upsert_comment(repo_state, ctx, line, body)
     repo_root = ctx.repo_root,
     absolute_path = ctx.absolute_path,
     relative_path = ctx.relative_path,
-    line = line,
     body = body,
     created_at = timestamp,
     updated_at = timestamp,
@@ -392,7 +240,7 @@ local function upsert_comment(repo_state, ctx, line, body)
     stale = false,
   }
 
-  apply_anchor(comment, lines, line)
+  apply_anchor(comment, lines, resolved_line)
   table.insert(comments, comment)
   return comment, false
 end
@@ -405,22 +253,11 @@ local function find_current_comment()
   end
 
   local line = current_line()
-  for index, comment in ipairs(resolved.repo_state.data.comments) do
-    if comment.relative_path == resolved.ctx.relative_path and comment.line == line then
-      return {
-        ---@type LocalReviewComment
-        comment = comment,
-        index = index,
-        ctx = resolved.ctx,
-        repo_state = resolved.repo_state,
-      }
-    end
-  end
-
+  local comment, index = find_comment_entry_at_line(resolved.repo_state.data.comments, resolved.ctx.relative_path, line)
   return {
     ---@type LocalReviewComment?
-    comment = nil,
-    index = nil,
+    comment = comment,
+    index = index,
     ctx = resolved.ctx,
     repo_state = resolved.repo_state,
   }
@@ -432,21 +269,11 @@ local function find_line_comment(bufnr, line)
     return nil, err
   end
 
-  for index, comment in ipairs(resolved.repo_state.data.comments) do
-    if comment.relative_path == resolved.ctx.relative_path and comment.line == line then
-      return {
-        comment = comment,
-        index = index,
-        ctx = resolved.ctx,
-        repo_state = resolved.repo_state,
-      }
-    end
-  end
-
+  local comment, index = find_comment_entry_at_line(resolved.repo_state.data.comments, resolved.ctx.relative_path, line)
   return {
     ---@type LocalReviewComment?
-    comment = nil,
-    index = nil,
+    comment = comment,
+    index = index,
     ctx = resolved.ctx,
     repo_state = resolved.repo_state,
   }
@@ -504,7 +331,7 @@ function M.upsert_line_comment(line_state, body)
   local _, updated = upsert_comment(
     line_state.repo_state,
     line_state.ctx,
-    line_state.comment and line_state.comment.line or current_line(),
+    line_state.comment and line_state.comment.anchor.line_number or current_line(),
     trimmed
   )
   local ok, err = persist_repo_state(line_state.ctx.repo_root, line_state.repo_state.data)
@@ -623,13 +450,13 @@ function M.jump(direction)
 
   local line = current_line()
   table.sort(comments, function(a, b)
-    return a.line < b.line
+    return a.anchor.line_number < b.anchor.line_number
   end)
 
   local target
   if direction > 0 then
     for _, comment in ipairs(comments) do
-      if comment.line > line then
+      if comment.anchor.line_number > line then
         target = comment
         break
       end
@@ -637,7 +464,7 @@ function M.jump(direction)
     target = target or comments[1]
   else
     for index = #comments, 1, -1 do
-      if comments[index].line < line then
+      if comments[index].anchor.line_number < line then
         target = comments[index]
         break
       end
@@ -646,8 +473,8 @@ function M.jump(direction)
   end
 
   local max_line = math.max(vim.api.nvim_buf_line_count(0), 1)
-  local line = math.max(1, math.min(target.line or 1, max_line))
-  vim.api.nvim_win_set_cursor(0, { line, 0 })
+  local target_line = math.max(1, math.min(target.anchor.line_number, max_line))
+  vim.api.nvim_win_set_cursor(0, { target_line, 0 })
   if target.stale then
     vim.notify("Jumped to a stale review comment.", vim.log.levels.WARN)
   end

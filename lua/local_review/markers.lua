@@ -17,7 +17,7 @@ function M.refresh(bufnr)
   local opts = marker_opts()
   local max_line = math.max(vim.api.nvim_buf_line_count(bufnr), 1)
   for index, comment in ipairs(comments) do
-    local line = math.max(1, math.min(comment.line or 1, max_line))
+    local line = math.max(1, math.min(comment.anchor.line_number, max_line))
     vim.api.nvim_buf_set_extmark(bufnr, namespace, line - 1, 0, {
       sign_text = opts.marker_text,
       sign_hl_group = opts.marker_hl,

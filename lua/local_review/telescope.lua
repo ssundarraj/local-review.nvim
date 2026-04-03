@@ -44,6 +44,7 @@ local function status_summary(comment)
   return comment_summary(comment.body)
 end
 
+---@param comment LocalReviewComment
 local function open_comment(comment)
   if vim.fn.filereadable(comment.absolute_path) == 0 then
     vim.notify(string.format("Comment file no longer exists: %s", comment.absolute_path), vim.log.levels.WARN)
@@ -52,7 +53,7 @@ local function open_comment(comment)
 
   vim.cmd.edit(vim.fn.fnameescape(comment.absolute_path))
   local max_line = math.max(vim.api.nvim_buf_line_count(0), 1)
-  local line = math.max(1, math.min(comment.line or 1, max_line))
+  local line = math.max(1, math.min(comment.anchor.line_number, max_line))
   vim.api.nvim_win_set_cursor(0, { line, 0 })
   if comment.stale then
     vim.notify("This review comment is stale and may no longer point at the original code.", vim.log.levels.WARN)
@@ -68,7 +69,7 @@ local function preview_lines(comment)
     }, nil
   end
 
-  return vim.fn.readfile(comment.absolute_path), comment.line
+  return vim.fn.readfile(comment.absolute_path), comment.anchor.line_number
 end
 
 local function previewer(previewers)
@@ -135,13 +136,13 @@ function M.comments(opts)
             value = comment,
             ordinal = table.concat({
               comment.relative_path,
-              tostring(comment.line),
+              tostring(comment.anchor.line_number),
               summary,
             }, " "),
             display = function(entry)
               return displayer({
                 entry.value.relative_path,
-                tostring(entry.value.line),
+                tostring(entry.value.anchor.line_number),
                 status_summary(entry.value),
               })
             end,
