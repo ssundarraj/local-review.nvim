@@ -5,10 +5,6 @@ local comments = require("local_review.comments")
 local export_indent_width = 3
 local export_indent = string.rep(" ", export_indent_width)
 
-local function notify(message, level)
-  vim.notify(message, level or vim.log.levels.INFO)
-end
-
 local function export_lines(repo_root)
   local repo_comments = comments.list_repo_comments(repo_root)
   if #repo_comments == 0 then
@@ -40,7 +36,7 @@ end
 function M.open_repo_export()
   local repo_root, err = context.repo_root()
   if not repo_root then
-    notify(err, vim.log.levels.WARN)
+    vim.notify(err or "Failed to determine the current repository root.", vim.log.levels.WARN)
     return
   end
 

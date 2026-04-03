@@ -3,10 +3,6 @@ local M = {}
 local comments = require("local_review.comments")
 local context = require("local_review.context")
 
-local function notify(message, level)
-  vim.notify(message, level or vim.log.levels.INFO)
-end
-
 local function telescope_modules()
   local ok, telescope = pcall(require, "telescope")
   if not ok then
@@ -49,7 +45,7 @@ end
 
 local function open_comment(comment)
   if vim.fn.filereadable(comment.absolute_path) == 0 then
-    notify(string.format("Comment file no longer exists: %s", comment.absolute_path), vim.log.levels.WARN)
+    vim.notify(string.format("Comment file no longer exists: %s", comment.absolute_path), vim.log.levels.WARN)
     return
   end
 
@@ -58,7 +54,7 @@ local function open_comment(comment)
   local line = math.max(1, math.min(comment.line or 1, max_line))
   vim.api.nvim_win_set_cursor(0, { line, 0 })
   if comment.stale then
-    notify("This review comment is stale and may no longer point at the original code.", vim.log.levels.WARN)
+    vim.notify("This review comment is stale and may no longer point at the original code.", vim.log.levels.WARN)
   end
 end
 
@@ -108,19 +104,19 @@ end
 function M.comments(opts)
   local modules, err = telescope_modules()
   if not modules then
-    notify(err, vim.log.levels.ERROR)
+    vim.notify(err or "Failed to load Telescope.", vim.log.levels.ERROR)
     return
   end
 
   local repo_root, repo_err = context.repo_root()
   if not repo_root then
-    notify(repo_err, vim.log.levels.WARN)
+    vim.notify(repo_err or "Failed to determine the current repository root.", vim.log.levels.WARN)
     return
   end
 
   local repo_comments = comments.list_repo_comments(repo_root)
   if #repo_comments == 0 then
-    notify("No review comments found for this repository.", vim.log.levels.INFO)
+    vim.notify("No review comments found for this repository.", vim.log.levels.INFO)
     return
   end
 

@@ -38,10 +38,6 @@ local function hrtime()
   return vim.uv.hrtime()
 end
 
-local function notify(message, level)
-  vim.notify(message, level or vim.log.levels.INFO)
-end
-
 ---@param text string
 ---@return string
 local function normalize_text(text)
@@ -137,7 +133,7 @@ end
 local function loaded_repo()
   local repo, err = storage.for_current_repo()
   if not repo then
-    notify(err, vim.log.levels.WARN)
+    vim.notify(err or "Failed to load repository state.", vim.log.levels.WARN)
     return nil
   end
   return repo
@@ -330,7 +326,7 @@ local function reconcile_buffer_state(bufnr, repo_state, ctx)
   if changed then
     local ok, err = storage.save_repo(ctx.repo_root, repo_state.data)
     if not ok then
-      notify(err, vim.log.levels.ERROR)
+      vim.notify(err or "Failed to save repository state.", vim.log.levels.ERROR)
     end
   end
 
@@ -404,7 +400,7 @@ end
 local function find_current_comment()
   local resolved, err = repo_state_for_buffer(0)
   if not resolved then
-    notify(err, vim.log.levels.WARN)
+    vim.notify(err or "Failed to find the current review comment.", vim.log.levels.WARN)
     return nil
   end
 
@@ -475,7 +471,7 @@ end
 function M.comments_for_buffer(bufnr)
   local resolved, err = repo_state_for_buffer(bufnr or 0)
   if not resolved then
-    notify(err, vim.log.levels.WARN)
+    vim.notify(err or "Failed to load comments for the current buffer.", vim.log.levels.WARN)
     return {}
   end
 
@@ -492,7 +488,7 @@ end
 function M.get_line_state(bufnr, line)
   local result, err = find_line_comment(bufnr or 0, line)
   if not result then
-    notify(err, vim.log.levels.WARN)
+    vim.notify(err or "Failed to find a review comment for the current line.", vim.log.levels.WARN)
     return nil
   end
 
@@ -584,17 +580,17 @@ function M.prompt_for_current_line()
 
     local trimmed = vim.trim(input)
     if trimmed == "" then
-      notify("Comment cannot be empty.", vim.log.levels.WARN)
+      vim.notify("Comment cannot be empty.", vim.log.levels.WARN)
       return
     end
 
     local _, updated = upsert_comment(result.repo_state, result.ctx, line, trimmed)
     local ok, err = persist_repo_state(result.ctx.repo_root, result.repo_state.data)
     if not ok then
-      notify(err, vim.log.levels.ERROR)
+      vim.notify(err or "Failed to save the review comment.", vim.log.levels.ERROR)
       return
     end
-    notify(updated and "Review comment updated." or "Review comment added.")
+    vim.notify(updated and "Review comment updated." or "Review comment added.", vim.log.levels.INFO)
   end)
 end
 
@@ -605,23 +601,23 @@ function M.delete_current_line()
   end
 
   if result.index == nil then
-    notify("No review comment on the current line.", vim.log.levels.INFO)
+    vim.notify("No review comment on the current line.", vim.log.levels.INFO)
     return
   end
 
   table.remove(result.repo_state.data.comments, result.index)
   local ok, err = persist_repo_state(result.ctx.repo_root, result.repo_state.data)
   if not ok then
-    notify(err, vim.log.levels.ERROR)
+    vim.notify(err or "Failed to delete the review comment.", vim.log.levels.ERROR)
     return
   end
-  notify("Review comment deleted.")
+  vim.notify("Review comment deleted.", vim.log.levels.INFO)
 end
 
 function M.jump(direction)
   local comments = M.comments_for_buffer(0)
   if #comments == 0 then
-    notify("No review comments in the current buffer.", vim.log.levels.INFO)
+    vim.notify("No review comments in the current buffer.", vim.log.levels.INFO)
     return
   end
 
@@ -653,7 +649,7 @@ function M.jump(direction)
   local line = math.max(1, math.min(target.line or 1, max_line))
   vim.api.nvim_win_set_cursor(0, { line, 0 })
   if target.stale then
-    notify("Jumped to a stale review comment.", vim.log.levels.WARN)
+    vim.notify("Jumped to a stale review comment.", vim.log.levels.WARN)
   end
 end
 
@@ -668,13 +664,13 @@ function M.clear_repo()
   if not deleted then
     local ok, err = persist_repo_state(repo_state.repo_root, repo_state.data)
     if not ok then
-      notify(err, vim.log.levels.ERROR)
+      vim.notify(err or "Failed to clear review comments for the current repo.", vim.log.levels.ERROR)
       return
     end
   else
     refresh_repo_buffers(repo_state.repo_root)
   end
-  notify("Cleared review comments for current repo.")
+  vim.notify("Cleared review comments for current repo.", vim.log.levels.INFO)
 end
 
 return M

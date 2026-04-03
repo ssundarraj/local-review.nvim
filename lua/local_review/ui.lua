@@ -51,10 +51,6 @@ local function is_dirty()
   return current_body() ~= vim.trim(state.initial_body or "")
 end
 
-local function notify(message, level)
-  vim.notify(message, level or vim.log.levels.INFO)
-end
-
 local function update_placeholder(bufnr)
   if not is_valid_buffer(bufnr) then
     return
@@ -110,16 +106,16 @@ local function persist(opts)
   local notify_result = not (opts and opts.silent)
   local result, err = comments.set_line_comment(state.source_bufnr, state.source_line, current_body())
   if not result then
-    notify(err, vim.log.levels.ERROR)
+    vim.notify(err or "Failed to save the review comment.", vim.log.levels.ERROR)
     return false
   end
 
   if notify_result and result == "created" then
-    notify("Review comment added.")
+    vim.notify("Review comment added.", vim.log.levels.INFO)
   elseif notify_result and result == "updated" then
-    notify("Review comment updated.")
+    vim.notify("Review comment updated.", vim.log.levels.INFO)
   elseif notify_result and result == "deleted" then
-    notify("Review comment deleted.")
+    vim.notify("Review comment deleted.", vim.log.levels.INFO)
   end
 
   state.initial_body = current_body()
@@ -339,7 +335,7 @@ function M.open_current_line()
   attach_editor_autocmds(bufnr, winid)
   update_placeholder(bufnr)
   if line_state.comment and line_state.comment.stale then
-    notify("This review comment is stale and may no longer point at the original code.", vim.log.levels.WARN)
+    vim.notify("This review comment is stale and may no longer point at the original code.", vim.log.levels.WARN)
   end
 end
 
