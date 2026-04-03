@@ -1,7 +1,7 @@
 local M = {}
 
-local context_radius = 2
-local nearby_search_radius = 20
+local max_context_radius = 4
+local search_band_radii = { 5, 15, 40 }
 
 ---@param text string?
 ---@return string
@@ -57,42 +57,47 @@ local function context_score(anchor, lines, line)
   for index, value in ipairs(anchor.normalized_before_context) do
     local candidate_line = line - (#anchor.normalized_before_context - index + 1)
     if normalize_text(line_at(lines, candidate_line)) == value then
-      score = score + 1
+      local distance = #anchor.normalized_before_context - index + 1
+      score = score + math.max(1, max_context_radius - distance + 1)
     end
   end
 
   for index, value in ipairs(anchor.normalized_after_context) do
     local candidate_line = line + index
     if normalize_text(line_at(lines, candidate_line)) == value then
-      score = score + 1
+      score = score + math.max(1, max_context_radius - index + 1)
     end
   end
 
   return score
 end
 
----@param lines string[]
----@param target string
----@param start_line integer
----@param end_line integer
+---@param center_line integer
+---@param min_distance integer
+---@param max_distance integer
+---@param line_count integer
 ---@return integer[]
-local function candidate_lines(lines, target, start_line, end_line)
+local function band_lines(center_line, min_distance, max_distance, line_count)
   local matches = {}
-  for line = start_line, end_line do
-    if normalize_text(line_at(lines, line)) == target then
+  for line = 1, line_count do
+    local distance = math.abs(line - center_line)
+    if distance >= min_distance and distance <= max_distance then
       matches[#matches + 1] = line
     end
   end
   return matches
 end
 
----@param start_line integer
----@param end_line integer
+---@param lines string[]
+---@param target string
+---@param candidates integer[]
 ---@return integer[]
-local function line_range(start_line, end_line)
+local function candidate_lines(lines, target, candidates)
   local matches = {}
-  for line = start_line, end_line do
-    matches[#matches + 1] = line
+  for _, line in ipairs(candidates) do
+    if normalize_text(line_at(lines, line)) == target then
+      matches[#matches + 1] = line
+    end
   end
   return matches
 end
@@ -160,8 +165,8 @@ end
 ---@param line_number integer
 ---@return LineAnchor
 function M.capture(lines, line_number)
-  local before = lines_in_range(lines, line_number - context_radius, line_number - 1)
-  local after = lines_in_range(lines, line_number + 1, line_number + context_radius)
+  local before = lines_in_range(lines, line_number - max_context_radius, line_number - 1)
+  local after = lines_in_range(lines, line_number + 1, line_number + max_context_radius)
   local line_text = line_at(lines, line_number)
 
   return {
@@ -189,30 +194,34 @@ function M.resolve(anchor, lines)
     return stored_line
   end
 
-  -- Search in nearby_search_radius first
-  local start_line = math.max(1, stored_line - nearby_search_radius)
-  local end_line = math.min(line_count, stored_line + nearby_search_radius)
-  local matches = candidate_lines(lines, target, start_line, end_line)
-  local resolved = select_candidate(anchor, lines, matches)
+  local previous_radius = 0
+  for _, radius in ipairs(search_band_radii) do
+    local band = band_lines(stored_line, previous_radius + 1, radius, line_count)
+    local matches = candidate_lines(lines, target, band)
+    local resolved = select_candidate(anchor, lines, matches)
+    if resolved then
+      return resolved
+    end
+    previous_radius = radius
+  end
 
+  local all_lines = band_lines(stored_line, 0, line_count, line_count)
+  local resolved = select_candidate(anchor, lines, candidate_lines(lines, target, all_lines))
   if resolved then
     return resolved
   end
 
-  -- Fallback to searching entire file
-  matches = candidate_lines(lines, target, 1, line_count)
-  resolved = select_candidate(anchor, lines, matches)
-  if resolved then
-    return resolved
+  previous_radius = -1
+  for _, radius in ipairs(search_band_radii) do
+    local band = band_lines(stored_line, previous_radius + 1, radius, line_count)
+    resolved = select_candidate(anchor, lines, band)
+    if resolved then
+      return resolved
+    end
+    previous_radius = radius
   end
 
-  -- When the target line text changes, fall back to context-only matching.
-  resolved = select_candidate(anchor, lines, line_range(start_line, end_line))
-  if resolved then
-    return resolved
-  end
-
-  return select_candidate(anchor, lines, line_range(1, line_count))
+  return select_candidate(anchor, lines, all_lines)
 end
 
 return M

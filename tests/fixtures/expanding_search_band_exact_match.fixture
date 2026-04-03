@@ -1,0 +1,53 @@
+--- file_before
+header
+ctxb4
+ctxb3
+before1
+before2
+target
+after1
+after2
+ctxa3
+ctxa4
+footer
+--- file_after
+header
+pad1
+pad2
+pad3
+pad4
+pad5
+pad6
+pad7
+pad8
+pad9
+pad10
+pad11
+pad12
+pad13
+pad14
+pad15
+pad16
+pad17
+noise_before_a
+noise_before_b
+before1
+before2
+target
+after1
+after2
+noise_after_a
+noise_after_b
+ctxb4
+ctxb3
+before1
+before2
+target
+after1
+after2
+ctxa3
+ctxa4
+footer
+--- assertions
+before_line: 6
+resolved_after_line: 32
