@@ -1,2 +1,3 @@
 .nvimlog
 *.DS_Store
+*nvim.log
