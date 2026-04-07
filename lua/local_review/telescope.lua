@@ -110,38 +110,38 @@ function M.comments(opts)
     return
   end
 
-  local repo_root, repo_err = context.repo_root()
-  if not repo_root then
-    vim.notify(repo_err or "Failed to determine the current repository root.", vim.log.levels.WARN)
-    return
-  end
-
-  local repo_comments = comments.list_repo_comments(repo_root)
-  if #repo_comments == 0 then
-    vim.notify("No review comments found for this repository.", vim.log.levels.INFO)
-    return
-  end
-
   opts = opts or {}
+  local target_path = opts.path or context.default_export_root()
+  local path_comments, _, err = comments.list_comments_in_path(target_path)
+  if not path_comments then
+    vim.notify(err or "Failed to determine the current comment scope.", vim.log.levels.WARN)
+    return
+  end
+
+  if #path_comments == 0 then
+    vim.notify("No review comments found for the selected path.", vim.log.levels.INFO)
+    return
+  end
+
   local displayer = entry_displayer(modules.entry_display)
 
   modules.pickers
     .new(opts, {
       prompt_title = "Local Review Comments",
       finder = modules.finders.new_table({
-        results = repo_comments,
+        results = path_comments,
         entry_maker = function(comment)
           local summary = status_summary(comment)
           return {
             value = comment,
             ordinal = table.concat({
-              comment.relative_path,
+              comment.absolute_path,
               tostring(comment.anchor.line_number),
               summary,
             }, " "),
             display = function(entry)
               return displayer({
-                entry.value.relative_path,
+                entry.value.absolute_path,
                 tostring(entry.value.anchor.line_number),
                 status_summary(entry.value),
               })

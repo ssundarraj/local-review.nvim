@@ -7,19 +7,19 @@ description: Use this skill when you need to read or clear local-review.nvim com
 
 `local-review.nvim` is a Neovim plugin that is used to add comments to code similar to a code review. You can read and clear comments.
 
-Run commands from the target repository root. Assume the plugin is already installed in the user's normal Neovim setup.
+Run commands from the target repository root when working with a repo. For non-repo files, run commands from a relevant parent directory. Assume the plugin is already installed in the user's normal Neovim setup.
 
 ## Read comments
 
 ```sh
-nvim --headless '+LocalReviewExport' \
+nvim --headless '+LocalReviewExport [path]' \
   +qa
 ```
 
 ## Clear comments
 
 ```sh
-nvim --headless '+LocalReviewClearRepo' \
+nvim --headless '+LocalReviewClear [path]' \
   +qa
 ```
 
@@ -36,4 +36,3 @@ comments.
 
 Comments can be stale. If they are marked stale, confirm with the user before addressing
 them.
-

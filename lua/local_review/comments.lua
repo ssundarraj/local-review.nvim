@@ -2,9 +2,7 @@ local M = {}
 
 ---@class LocalReviewComment
 ---@field id string
----@field repo_root string
 ---@field absolute_path string
----@field relative_path string
 ---@field body string
 ---@field created_at string
 ---@field updated_at string
@@ -54,27 +52,18 @@ local function ensure_comment_defaults(comment)
   end
 end
 
-local function loaded_repo()
-  local repo, err = storage.for_current_repo()
-  if not repo then
-    vim.notify(err or "Failed to load repository state.", vim.log.levels.WARN)
-    return nil
-  end
-  return repo
-end
-
 local function current_line()
   return vim.api.nvim_win_get_cursor(0)[1]
 end
 
-local function refresh_repo_buffers(repo_root)
+local function refresh_scope_buffers(scope_root)
   local markers = require("local_review.markers")
   for _, bufnr in ipairs(vim.api.nvim_list_bufs()) do
     if vim.api.nvim_buf_is_loaded(bufnr) and vim.bo[bufnr].buftype == "" then
       local path = vim.api.nvim_buf_get_name(bufnr)
       if path ~= "" then
-        local root = context.repo_root(path)
-        if root == repo_root then
+        local root = context.scope_root(path)
+        if root == scope_root then
           markers.refresh(bufnr)
         end
       end
@@ -82,19 +71,19 @@ local function refresh_repo_buffers(repo_root)
   end
 end
 
-local function persist_repo_state(repo_root, data)
-  local ok, err = storage.save_repo(repo_root, data)
+local function persist_scope_state(scope_root, data)
+  local ok, err = storage.save_scope(scope_root, data)
   if not ok then
     return nil, err
   end
 
-  refresh_repo_buffers(repo_root)
+  refresh_scope_buffers(scope_root)
   return true
 end
 
 local function comment_sorter(a, b)
-  if a.relative_path ~= b.relative_path then
-    return a.relative_path < b.relative_path
+  if a.absolute_path ~= b.absolute_path then
+    return a.absolute_path < b.absolute_path
   end
   if a.anchor.line_number ~= b.anchor.line_number then
     return a.anchor.line_number < b.anchor.line_number
@@ -138,41 +127,39 @@ local function clamp_line(line, lines)
   return math.max(1, math.min(line, max_line))
 end
 
-local function find_comment_at_line(comments, relative_path, line)
+local function find_comment_at_line(comments, absolute_path, line)
   for _, comment in ipairs(comments) do
     ensure_comment_defaults(comment)
-    if comment.relative_path == relative_path and comment.anchor.line_number == line then
+    if comment.absolute_path == absolute_path and comment.anchor.line_number == line then
       return comment
     end
   end
   return nil
 end
 
-local function find_comment_entry_at_line(comments, relative_path, line)
+local function find_comment_entry_at_line(comments, absolute_path, line)
   for index, comment in ipairs(comments) do
     ensure_comment_defaults(comment)
-    if comment.relative_path == relative_path and comment.anchor.line_number == line then
+    if comment.absolute_path == absolute_path and comment.anchor.line_number == line then
       return comment, index
     end
   end
   return nil, nil
 end
 
-local function reconcile_buffer_state(bufnr, repo_state, ctx)
+local function reconcile_buffer_state(bufnr, scope_state, ctx)
   local lines = buffer_lines(bufnr)
   local fingerprint = buffer_fingerprint(lines)
   local previous = state.file_fingerprints[ctx.absolute_path]
-  local comments = repo_state.data.comments
+  local comments = scope_state.data.comments
 
   if previous == fingerprint then
-    return repo_state
+    return scope_state
   end
 
   local changed = false
   for _, comment in ipairs(comments) do
-    if comment.relative_path == ctx.relative_path then
-      comment.absolute_path = ctx.absolute_path
-      comment.repo_root = ctx.repo_root
+    if comment.absolute_path == ctx.absolute_path then
       if reconcile_comment(comment, lines) then
         changed = true
       end
@@ -180,38 +167,38 @@ local function reconcile_buffer_state(bufnr, repo_state, ctx)
   end
 
   if changed then
-    local ok, err = storage.save_repo(ctx.repo_root, repo_state.data)
+    local ok, err = storage.save_scope(ctx.scope_root, scope_state.data)
     if not ok then
-      vim.notify(err or "Failed to save repository state.", vim.log.levels.ERROR)
+      vim.notify(err or "Failed to save review comments.", vim.log.levels.ERROR)
     end
   end
 
   state.file_fingerprints[ctx.absolute_path] = fingerprint
-  return repo_state
+  return scope_state
 end
 
-local function repo_state_for_buffer(bufnr)
+local function scope_state_for_buffer(bufnr)
   local ctx, err = context.comment_context(bufnr)
   if not ctx then
     return nil, err
   end
 
-  local repo_state = {
-    repo_root = ctx.repo_root,
-    data = storage.load_repo(ctx.repo_root),
+  local scope_state = {
+    scope_root = ctx.scope_root,
+    data = storage.load_scope(ctx.scope_root),
   }
 
-  reconcile_buffer_state(bufnr or 0, repo_state, ctx)
+  reconcile_buffer_state(bufnr or 0, scope_state, ctx)
   return {
     ctx = ctx,
-    repo_state = repo_state,
+    scope_state = scope_state,
   }
 end
 
 ---@return LocalReviewComment, boolean
-local function upsert_comment(repo_state, ctx, line, body)
-  local comments = repo_state.data.comments
-  local existing = find_comment_at_line(comments, ctx.relative_path, line)
+local function upsert_comment(scope_state, ctx, line, body)
+  local comments = scope_state.data.comments
+  local existing = find_comment_at_line(comments, ctx.absolute_path, line)
 
   local timestamp = now()
   local lines = buffer_lines(ctx.bufnr)
@@ -220,7 +207,6 @@ local function upsert_comment(repo_state, ctx, line, body)
     existing.body = body
     existing.updated_at = timestamp
     existing.absolute_path = ctx.absolute_path
-    existing.repo_root = ctx.repo_root
     apply_anchor(existing, lines, resolved_line)
     return existing, true
   end
@@ -229,9 +215,7 @@ local function upsert_comment(repo_state, ctx, line, body)
   local source_kind = filetype:match("^Diffview") and "diffview" or "buffer"
   local comment = {
     id = tostring(hrtime()),
-    repo_root = ctx.repo_root,
     absolute_path = ctx.absolute_path,
-    relative_path = ctx.relative_path,
     body = body,
     created_at = timestamp,
     updated_at = timestamp,
@@ -246,37 +230,100 @@ local function upsert_comment(repo_state, ctx, line, body)
 end
 
 local function find_current_comment()
-  local resolved, err = repo_state_for_buffer(0)
+  local resolved, err = scope_state_for_buffer(0)
   if not resolved then
     vim.notify(err or "Failed to find the current review comment.", vim.log.levels.WARN)
     return nil
   end
 
   local line = current_line()
-  local comment, index = find_comment_entry_at_line(resolved.repo_state.data.comments, resolved.ctx.relative_path, line)
+  local comment, index = find_comment_entry_at_line(resolved.scope_state.data.comments, resolved.ctx.absolute_path, line)
   return {
     ---@type LocalReviewComment?
     comment = comment,
     index = index,
     ctx = resolved.ctx,
-    repo_state = resolved.repo_state,
+    scope_state = resolved.scope_state,
   }
 end
 
 local function find_line_comment(bufnr, line)
-  local resolved, err = repo_state_for_buffer(bufnr)
+  local resolved, err = scope_state_for_buffer(bufnr)
   if not resolved then
     return nil, err
   end
 
-  local comment, index = find_comment_entry_at_line(resolved.repo_state.data.comments, resolved.ctx.relative_path, line)
+  local comment, index = find_comment_entry_at_line(resolved.scope_state.data.comments, resolved.ctx.absolute_path, line)
   return {
     ---@type LocalReviewComment?
     comment = comment,
     index = index,
     ctx = resolved.ctx,
-    repo_state = resolved.repo_state,
+    scope_state = resolved.scope_state,
   }
+end
+
+local function comments_in_scope(scope_root)
+  local data = storage.load_scope(scope_root)
+  for _, comment in ipairs(data.comments) do
+    ensure_comment_defaults(comment)
+  end
+  table.sort(data.comments, comment_sorter)
+  return data.comments
+end
+
+local function comments_matching_path(target_path, kind)
+  local matches = {}
+  for _, scope in ipairs(storage.list_scopes()) do
+    for _, comment in ipairs(scope.data.comments or {}) do
+      ensure_comment_defaults(comment)
+      if kind == "file" then
+        if comment.absolute_path == target_path then
+          table.insert(matches, comment)
+        end
+      elseif context.is_within(target_path, comment.absolute_path) then
+        table.insert(matches, comment)
+      end
+    end
+  end
+
+  table.sort(matches, comment_sorter)
+  return matches
+end
+
+local function remove_matching_comments(target_path, kind)
+  local changed_scopes = {}
+
+  for _, scope in ipairs(storage.list_scopes()) do
+    local kept = {}
+    local changed = false
+    for _, comment in ipairs(scope.data.comments or {}) do
+      local matches = false
+      if kind == "file" then
+        matches = comment.absolute_path == target_path
+      else
+        matches = context.is_within(target_path, comment.absolute_path)
+      end
+
+      if matches then
+        changed = true
+      else
+        table.insert(kept, comment)
+      end
+    end
+
+    if changed then
+      changed_scopes[#changed_scopes + 1] = {
+        scope_root = scope.scope_root,
+        data = {
+          scope_root = scope.scope_root,
+          comments = kept,
+        },
+      }
+    end
+  end
+
+  return changed_scopes
 end
 
 function M.status_label(comment)
@@ -286,26 +333,36 @@ function M.status_label(comment)
   return nil
 end
 
-function M.list_repo_comments(repo_root)
-  local data = storage.load_repo(repo_root)
-  for _, comment in ipairs(data.comments) do
-    ensure_comment_defaults(comment)
-  end
-  table.sort(data.comments, comment_sorter)
-  return data.comments
+function M.list_scope_comments(scope_root)
+  return comments_in_scope(scope_root)
 end
 
-function M.comments_for_buffer(bufnr)
-  local resolved, err = repo_state_for_buffer(bufnr or 0)
+function M.list_comments_in_path(path)
+  local target = path
+  if target == nil or target == "" then
+    target = context.default_export_root()
+  end
+
+  local kind, normalized_or_err = context.path_kind(target)
+  if not kind then
+    return nil, normalized_or_err
+  end
+
+  return comments_matching_path(normalized_or_err, kind), normalized_or_err, kind
+end
+
+function M.comments_for_buffer(bufnr, opts)
+  local resolved, err = scope_state_for_buffer(bufnr or 0)
   if not resolved then
-    vim.notify(err or "Failed to load comments for the current buffer.", vim.log.levels.WARN)
+    if not (opts and opts.silent) then
+      vim.notify(err or "Failed to load comments for the current buffer.", vim.log.levels.WARN)
+    end
     return {}
   end
 
-  local comments = M.list_repo_comments(resolved.ctx.repo_root)
   local matches = {}
-  for _, comment in ipairs(comments) do
-    if comment.relative_path == resolved.ctx.relative_path then
+  for _, comment in ipairs(comments_in_scope(resolved.ctx.scope_root)) do
+    if comment.absolute_path == resolved.ctx.absolute_path then
       table.insert(matches, comment)
     end
   end
@@ -329,12 +386,12 @@ function M.upsert_line_comment(line_state, body)
   end
 
   local _, updated = upsert_comment(
-    line_state.repo_state,
+    line_state.scope_state,
     line_state.ctx,
     line_state.comment and line_state.comment.anchor.line_number or current_line(),
     trimmed
   )
-  local ok, err = persist_repo_state(line_state.ctx.repo_root, line_state.repo_state.data)
+  local ok, err = persist_scope_state(line_state.ctx.scope_root, line_state.scope_state.data)
   if not ok then
     return nil, err
   end
@@ -350,8 +407,8 @@ function M.set_line_comment(bufnr, line, body)
   local trimmed = vim.trim(body or "")
   if trimmed == "" then
     if line_state.index ~= nil then
-      table.remove(line_state.repo_state.data.comments, line_state.index)
-      local ok, err = persist_repo_state(line_state.ctx.repo_root, line_state.repo_state.data)
+      table.remove(line_state.scope_state.data.comments, line_state.index)
+      local ok, err = persist_scope_state(line_state.ctx.scope_root, line_state.scope_state.data)
       if not ok then
         return nil, err
       end
@@ -361,8 +418,8 @@ function M.set_line_comment(bufnr, line, body)
     return "noop"
   end
 
-  local _, updated = upsert_comment(line_state.repo_state, line_state.ctx, line, trimmed)
-  local ok, err = persist_repo_state(line_state.ctx.repo_root, line_state.repo_state.data)
+  local _, updated = upsert_comment(line_state.scope_state, line_state.ctx, line, trimmed)
+  local ok, err = persist_scope_state(line_state.ctx.scope_root, line_state.scope_state.data)
   if not ok then
     return nil, err
   end
@@ -379,12 +436,21 @@ function M.delete_line_comment(bufnr, line)
     return "missing"
   end
 
-  table.remove(line_state.repo_state.data.comments, line_state.index)
-  local ok, err = persist_repo_state(line_state.ctx.repo_root, line_state.repo_state.data)
+  table.remove(line_state.scope_state.data.comments, line_state.index)
+  local ok, err = persist_scope_state(line_state.ctx.scope_root, line_state.scope_state.data)
   if not ok then
     return nil, err
   end
   return "deleted"
+end
+
+local function prompt_display_path(ctx)
+  local repo_root = context.repo_root(ctx.absolute_path)
+  if repo_root then
+    return context.relative_path(repo_root, ctx.absolute_path) or ctx.absolute_path
+  end
+
+  return ctx.absolute_path
 end
 
 function M.prompt_for_current_line()
@@ -395,11 +461,11 @@ function M.prompt_for_current_line()
 
   local line = current_line()
   local prompt = result.comment and "Edit review comment" or "Add review comment"
-  local default = result.comment and result.comment.body or ""
+  local display_path = prompt_display_path(result.ctx)
 
   vim.ui.input({
-    prompt = string.format("%s (%s:%d): ", prompt, result.ctx.relative_path, line),
-    default = default,
+    prompt = string.format("%s (%s:%d): ", prompt, display_path, line),
+    default = result.comment and result.comment.body or "",
   }, function(input)
     if input == nil then
       return
@@ -411,8 +477,8 @@ function M.prompt_for_current_line()
       return
     end
 
-    local _, updated = upsert_comment(result.repo_state, result.ctx, line, trimmed)
-    local ok, err = persist_repo_state(result.ctx.repo_root, result.repo_state.data)
+    local _, updated = upsert_comment(result.scope_state, result.ctx, line, trimmed)
+    local ok, err = persist_scope_state(result.ctx.scope_root, result.scope_state.data)
     if not ok then
       vim.notify(err or "Failed to save the review comment.", vim.log.levels.ERROR)
       return
@@ -432,8 +498,8 @@ function M.delete_current_line()
     return
   end
 
-  table.remove(result.repo_state.data.comments, result.index)
-  local ok, err = persist_repo_state(result.ctx.repo_root, result.repo_state.data)
+  table.remove(result.scope_state.data.comments, result.index)
+  local ok, err = persist_scope_state(result.ctx.scope_root, result.scope_state.data)
   if not ok then
     vim.notify(err or "Failed to delete the review comment.", vim.log.levels.ERROR)
     return
@@ -480,24 +546,44 @@ function M.jump(direction)
   end
 end
 
-function M.clear_repo()
-  local repo_state = loaded_repo()
-  if not repo_state then
+function M.clear_path(path)
+  local comments_in_path, target_path, kind = M.list_comments_in_path(path)
+  if not comments_in_path then
+    vim.notify(target_path or "Failed to resolve comment scope.", vim.log.levels.WARN)
     return
   end
 
-  repo_state.data.comments = {}
-  local deleted = storage.delete_repo(repo_state.repo_root)
-  if not deleted then
-    local ok, err = persist_repo_state(repo_state.repo_root, repo_state.data)
-    if not ok then
-      vim.notify(err or "Failed to clear review comments for the current repo.", vim.log.levels.ERROR)
-      return
-    end
-  else
-    refresh_repo_buffers(repo_state.repo_root)
+  if #comments_in_path == 0 then
+    vim.notify("No review comments found for the selected path.", vim.log.levels.INFO)
+    return
   end
-  vim.notify("Cleared review comments for current repo.", vim.log.levels.INFO)
+
+  local changed_scopes = remove_matching_comments(target_path, kind)
+  for _, scope in ipairs(changed_scopes) do
+    if #scope.data.comments == 0 then
+      if not storage.delete_scope(scope.scope_root) then
+        local ok, err = persist_scope_state(scope.scope_root, scope.data)
+        if not ok then
+          vim.notify(err or "Failed to clear review comments.", vim.log.levels.ERROR)
+          return
+        end
+      else
+        refresh_scope_buffers(scope.scope_root)
+      end
+    else
+      local ok, err = persist_scope_state(scope.scope_root, scope.data)
+      if not ok then
+        vim.notify(err or "Failed to clear review comments.", vim.log.levels.ERROR)
+        return
+      end
+    end
+  end
+
+  vim.notify("Cleared review comments for selected path.", vim.log.levels.INFO)
+end
+
+function M.clear_repo()
+  M.clear_path()
 end
 
 return M

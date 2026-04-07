@@ -13,7 +13,7 @@ function M.refresh(bufnr)
 
   vim.api.nvim_buf_clear_namespace(bufnr, namespace, 0, -1)
 
-  local comments = require("local_review.comments").comments_for_buffer(bufnr)
+  local comments = require("local_review.comments").comments_for_buffer(bufnr, { silent = true })
   local opts = marker_opts()
   local max_line = math.max(vim.api.nvim_buf_line_count(bufnr), 1)
   for index, comment in ipairs(comments) do

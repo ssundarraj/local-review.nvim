@@ -53,11 +53,13 @@ end, { desc = "Local Review Picker" })
 - `:LocalReviewDelete` delete the comment on the current line
 - `:LocalReviewNext` jump to the next review comment in the current file
 - `:LocalReviewPrev` jump to the previous review comment in the current file
-- `:LocalReviewExport` print all review comments for the current repository in a copy/paste-friendly format.
-- `:LocalReviewClearRepo` delete all stored review comments for the current repository.
+- `:LocalReviewExport [path]` print review comments for a path in a copy/paste-friendly format. If omitted, it uses the current repo root when available, otherwise `cwd`.
+- `:LocalReviewClear [path]` delete stored review comments for a path. If omitted, it uses the current repo root when available, otherwise `cwd`.
+- `:LocalReviewClearRepo [path]` compatibility alias for `:LocalReviewClear`.
 
 ## Notes
 
-- Comments are scoped to each repo.
+- Comments are stored by scope root: repo root when inside git, otherwise the file's parent directory.
+- Export and clear can target either a file or a directory.
 - This was largely vibe-coded. There is likely some poor code and you may find bugs.
 - Issues/PRs welcome but please open an issue before making a large change.

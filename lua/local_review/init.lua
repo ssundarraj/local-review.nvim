@@ -58,13 +58,17 @@ function M.setup(opts)
       require("local_review.comments").jump(-1)
     end, {})
 
-    command("LocalReviewExport", function()
-      require("local_review.export").open_repo_export()
-    end, {})
+    command("LocalReviewExport", function(command_opts)
+      require("local_review.export").open_export(command_opts.args)
+    end, { nargs = "?" })
 
-    command("LocalReviewClearRepo", function()
-      require("local_review.comments").clear_repo()
-    end, {})
+    command("LocalReviewClear", function(command_opts)
+      require("local_review.comments").clear_path(command_opts.args)
+    end, { nargs = "?" })
+
+    command("LocalReviewClearRepo", function(command_opts)
+      require("local_review.comments").clear_path(command_opts.args)
+    end, { nargs = "?" })
 
     vim.api.nvim_create_autocmd({ "BufEnter", "BufReadPost", "BufWritePost", "FileChangedShellPost" }, {
       group = vim.api.nvim_create_augroup("local-review-refresh", { clear = true }),

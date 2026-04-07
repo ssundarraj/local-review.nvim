@@ -1,3 +1,4 @@
+---@diagnostic disable: undefined-global, undefined-field
 require("busted.runner")()
 
 package.path = table.concat({
