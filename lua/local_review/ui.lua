@@ -211,16 +211,19 @@ end
 
 local function set_editor_keymaps(bufnr)
   local function map(modes, lhs, rhs, desc)
+    if lhs == nil or lhs == "" then
+      return
+    end
+
     vim.keymap.set(modes, lhs, rhs, { buffer = bufnr, silent = true, nowait = true, desc = desc })
   end
 
-  map({ "n", "i" }, "<C-c>", function()
-    M.close_active()
-  end, "Local Review: Close")
-
-  map("n", "q", function()
-    M.close_active()
-  end, "Local Review: Close")
+  local opts = require("local_review").get_opts()
+  for _, keymap in ipairs(opts.comment_close_keys or {}) do
+    map(keymap.modes, keymap.key, function()
+      M.close_active()
+    end, "Local Review: Close")
+  end
 end
 
 local function attach_editor_autocmds(bufnr, winid)

@@ -38,6 +38,10 @@ Use your preferred plugin manager. Example with `lazy.nvim`:
         prev = "[r",
         export = "<leader>re",
       },
+      comment_close_keys = {
+        { modes = { "n" }, key = "q" },
+        { modes = { "n", "i" }, key = "<C-c>" },
+      },
     })
   end,
 }
@@ -61,11 +65,12 @@ end, { desc = "Local Review Picker" })
 - `:LocalReviewDelete` delete the comment on the current line
 - `:LocalReviewNext` jump to the next review comment in the current file
 - `:LocalReviewPrev` jump to the previous review comment in the current file
-- `:LocalReviewExport [path]` print review comments for a path in a copy/paste-friendly format. If omitted, it uses the current repo root when available, otherwise `cwd`.
-- `:LocalReviewClear [path]` delete stored review comments for a path. If omitted, it uses the current repo root when available, otherwise `cwd`.
+- `:LocalReviewExport [path]` print review comments for a path in a copy/paste-friendly format. If path is omitted, it uses the current repo root when available, otherwise `cwd`.
+- `:LocalReviewClear [path]` delete stored review comments for a path. If path is omitted, it uses the current repo root when available, otherwise `cwd`.
 
 ## Notes
 
+- The inline comment editor closes with `q` in normal mode and `<C-c>` in normal or insert mode by default. Configure those bindings through `comment_close_keys`, or remove entries to disable them.
 - Comments are stored by scope root: repo root when inside git, otherwise the file's parent directory.
 - Export and clear can target either a file or a directory.
 - This was largely vibe-coded. There is likely some poor code and you may find bugs.
