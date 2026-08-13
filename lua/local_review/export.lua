@@ -32,11 +32,15 @@ local function export_lines(path)
 
   for index, comment in ipairs(path_comments) do
     local stale_suffix = comment.stale and " [stale]" or ""
+    local line_ref = tostring(comment.anchor.line_number)
+    if (comment.line_end or comment.anchor.line_number) > comment.anchor.line_number then
+      line_ref = string.format("%d-%d", comment.anchor.line_number, comment.line_end)
+    end
     lines[#lines + 1] = string.format(
-      "%d. %s:%d%s",
+      "%d. %s:%s%s",
       index,
       display_path(root_path, path_kind, comment.absolute_path),
-      comment.anchor.line_number,
+      line_ref,
       stale_suffix
     )
     lines[#lines + 1] = export_indent .. comment.body:gsub("\n", "\n" .. export_indent)
@@ -67,7 +71,28 @@ function M.open_export(path, opts)
     return
   end
 
-  io.write(text .. "\n")
+  if #vim.api.nvim_list_uis() == 0 then
+    -- Headless runs (e.g. skills) still need stdout output.
+    io.write(text .. "\n")
+  else
+    local copied = false
+    for _, reg in ipairs({ "+", "*" }) do
+      local ok = pcall(vim.fn.setreg, reg, text)
+      if ok then
+        copied = true
+      end
+    end
+
+    if copied then
+      vim.notify(
+        string.format("Copied %d review comment(s) to the system clipboard.", comment_count),
+        vim.log.levels.INFO
+      )
+    else
+      vim.notify("Failed to copy review comments to the system clipboard.", vim.log.levels.ERROR)
+    end
+  end
+
   if opts and opts.clear_after_export and comment_count > 0 then
     comments.clear_path(export_path, { silent = true })
   end

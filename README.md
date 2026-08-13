@@ -58,15 +58,15 @@ Use your preferred plugin manager. Example with `lazy.nvim`:
   "ssundarraj/local-review.nvim",
   config = function()
     require("local_review").setup({
-      marker_text = "●",
-      marker_hl = "DiagnosticHint",
-      comment_box_width = 80,
+      marker_text = "▎",
+      marker_hl = "LocalReviewMarker",
       keymaps = {
         comment = "<leader>rc",
         delete = "<leader>rd",
         next = "]r",
         prev = "[r",
         export = "<leader>re",
+        list = "<leader>rl",
       },
       comment_close_keys = {
         { modes = { "n" }, key = "q" },
@@ -97,9 +97,10 @@ end, { desc = "Local Review Picker" })
 - `:LocalReviewDelete` delete the comment on the current line
 - `:LocalReviewNext` jump to the next review comment in the current file
 - `:LocalReviewPrev` jump to the previous review comment in the current file
-- `:LocalReviewExport [path]` print review comments for a path in a copy/paste-friendly format, then delete the exported comments. If path is omitted, it uses the current repo root when available, otherwise `cwd`.
-- `:LocalReviewExportPreserve [path]` print review comments without deleting them. If path is omitted, it uses the current repo root when available, otherwise `cwd`.
+- `:LocalReviewExport [path]` copy review comments for a path to the system clipboard in a copy/paste-friendly format, then delete the exported comments. In headless mode the output is printed to stdout so agent skills can read it. If path is omitted, it uses the current repo root when available, otherwise `cwd`.
+- `:LocalReviewExportPreserve [path]` copy review comments to the system clipboard without deleting them. In headless mode the output is printed to stdout. If path is omitted, it uses the current repo root when available, otherwise `cwd`.
 - `:LocalReviewClear [path]` delete stored review comments for a path. If path is omitted, it uses the current repo root when available, otherwise `cwd`.
+- `:LocalReviewList [path]` list review comments in the quickfix list. If path is omitted, it uses the current repo root when available, otherwise `cwd`.
 
 ## Skills
 
@@ -108,7 +109,7 @@ end, { desc = "Local Review Picker" })
 
 ## Notes
 
-- The inline comment editor closes with `q` in normal mode and `<C-c>` in normal or insert mode by default. Configure those bindings through `comment_close_keys`, or remove entries to disable them.
+- The inline comment editor starts in insert mode. `<Enter>` accepts the comment and returns to the buffer in normal mode, `<S-Enter>` inserts a newline, and it closes with `q` in normal mode and `<C-c>` in normal or insert mode by default. Configure the close bindings through `comment_close_keys`, or remove entries to disable them.
 - Comments are stored by scope root: repo root when inside git, otherwise the file's parent directory.
 - Export and clear can target either a file or a directory.
 - This was largely vibe-coded. There is likely some poor code and you may find bugs.

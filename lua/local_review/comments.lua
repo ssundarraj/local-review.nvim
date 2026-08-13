@@ -9,6 +9,7 @@ local M = {}
 ---@field source_kind string
 ---@field source_meta table
 ---@field stale boolean
+---@field line_end integer?
 ---@field anchor LineAnchor
 
 local context = require("local_review.context")
@@ -49,6 +50,9 @@ local function ensure_comment_defaults(comment)
   end
   if comment.stale == nil then
     comment.stale = false
+  end
+  if comment.anchor and (comment.line_end == nil or comment.line_end < comment.anchor.line_number) then
+    comment.line_end = comment.anchor.line_number
   end
 end
 
@@ -117,9 +121,10 @@ local function reconcile_comment(comment, lines)
     return false
   end
 
-  local moved = comment.anchor.line_number ~= resolved or comment.stale
+  local line_end = (comment.line_end or comment.anchor.line_number) + (resolved - comment.anchor.line_number)
   apply_anchor(comment, lines, resolved)
-  return moved
+  comment.line_end = math.max(resolved, line_end)
+  return true
 end
 
 local function clamp_line(line, lines)
@@ -127,10 +132,20 @@ local function clamp_line(line, lines)
   return math.max(1, math.min(line, max_line))
 end
 
+local function comment_covers_line(comment, absolute_path, line)
+  if comment.absolute_path ~= absolute_path then
+    return false
+  end
+
+  local first = comment.anchor.line_number
+  local last = math.max(first, comment.line_end or first)
+  return line >= first and line <= last
+end
+
 local function find_comment_at_line(comments, absolute_path, line)
   for _, comment in ipairs(comments) do
     ensure_comment_defaults(comment)
-    if comment.absolute_path == absolute_path and comment.anchor.line_number == line then
+    if comment_covers_line(comment, absolute_path, line) then
       return comment
     end
   end
@@ -140,7 +155,7 @@ end
 local function find_comment_entry_at_line(comments, absolute_path, line)
   for index, comment in ipairs(comments) do
     ensure_comment_defaults(comment)
-    if comment.absolute_path == absolute_path and comment.anchor.line_number == line then
+    if comment_covers_line(comment, absolute_path, line) then
       return comment, index
     end
   end
@@ -196,18 +211,22 @@ local function scope_state_for_buffer(bufnr)
 end
 
 ---@return LocalReviewComment, boolean
-local function upsert_comment(scope_state, ctx, line, body)
+local function upsert_comment(scope_state, ctx, line, body, line_end)
   local comments = scope_state.data.comments
   local existing = find_comment_at_line(comments, ctx.absolute_path, line)
 
   local timestamp = now()
   local lines = buffer_lines(ctx.bufnr)
   local resolved_line = clamp_line(line, lines)
+  local resolved_end = clamp_line(math.max(line, line_end or line), lines)
   if existing then
     existing.body = body
     existing.updated_at = timestamp
     existing.absolute_path = ctx.absolute_path
-    apply_anchor(existing, lines, resolved_line)
+    if line_end ~= nil then
+      apply_anchor(existing, lines, resolved_line)
+      existing.line_end = resolved_end
+    end
     return existing, true
   end
 
@@ -225,6 +244,7 @@ local function upsert_comment(scope_state, ctx, line, body)
   }
 
   apply_anchor(comment, lines, resolved_line)
+  comment.line_end = resolved_end
   table.insert(comments, comment)
   return comment, false
 end
@@ -403,7 +423,7 @@ function M.upsert_line_comment(line_state, body)
   return updated and "updated" or "created"
 end
 
-function M.set_line_comment(bufnr, line, body)
+function M.set_line_comment(bufnr, line, body, range)
   local line_state = M.get_line_state(bufnr, line)
   if not line_state then
     return nil, "Unable to resolve comment target."
@@ -425,7 +445,14 @@ function M.set_line_comment(bufnr, line, body)
     return "noop"
   end
 
-  local _, updated = upsert_comment(line_state.scope_state, line_state.ctx, line, trimmed)
+  local anchor_line = line
+  local line_end = nil
+  if range then
+    anchor_line = math.min(range.start_line, range.end_line)
+    line_end = math.max(range.start_line, range.end_line)
+  end
+
+  local _, updated = upsert_comment(line_state.scope_state, line_state.ctx, anchor_line, trimmed, line_end)
   local ok, err = persist_scope_state(line_state.ctx.scope_root, line_state.scope_state.data)
   if not ok then
     return nil, err
