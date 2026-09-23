@@ -196,6 +196,15 @@ local function text_column_offset(winid)
   return vim.fn.getwininfo(winid)[1].textoff
 end
 
+local function configured_width()
+  local width_config = require("local_review").get_opts().comment_box_width
+  if type(width_config) == "number" then
+    return math.max(1, math.floor(width_config))
+  end
+
+  return 80
+end
+
 --- Height of the editable content: lines up to the last non-blank line,
 --- keeping at least the line the cursor is on so the box never hides it.
 local function content_height(lines)
@@ -222,7 +231,8 @@ local border_width = 2
 local function inline_dimensions(lines, source_winid, anchor_row)
   local win_width = vim.api.nvim_win_get_width(source_winid)
   local text_offset = text_column_offset(source_winid)
-  local width = math.max(1, win_width - text_offset - border_width)
+  local available_width = math.max(1, win_width - text_offset - border_width)
+  local width = math.min(configured_width(), available_width)
 
   local row = anchor_row or (vim.fn.winline() + 1)
   local available_height = math.max(6, vim.api.nvim_win_get_height(source_winid) - row - 1)
@@ -379,17 +389,6 @@ local function set_editor_keymaps(bufnr)
   vim.keymap.set("i", "<Left>", function()
     return vim.api.nvim_win_get_cursor(0)[2] <= 1 and "" or "<Left>"
   end, { buffer = bufnr, expr = true, desc = "Local Review: Left" })
-
-  -- <CR> accepts the comment; <S-CR> inserts a newline.
-  vim.keymap.set({ "n", "i" }, "<CR>", function()
-    if M.close_active() then
-      vim.cmd("stopinsert")
-    end
-  end, { buffer = bufnr, silent = true, desc = "Local Review: Accept" })
-  vim.keymap.set("i", "<S-CR>", function()
-    vim.api.nvim_feedkeys(vim.api.nvim_replace_termcodes("<CR>", true, true, true), "ni", false)
-    return ""
-  end, { buffer = bufnr, expr = true, desc = "Local Review: Newline" })
 end
 
 local function attach_editor_autocmds(bufnr, winid)
@@ -550,8 +549,6 @@ function M.open_current_line(range)
   vim.wo[winid].relativenumber = false
   vim.wo[winid].signcolumn = "no"
   vim.wo[winid].winhighlight = "Normal:NormalFloat,FloatBorder:FloatBorder,FloatTitle:LocalReviewEditorTitle"
-  vim.bo[bufnr].autoindent = true
-
   set_editor_keymaps(bufnr)
   attach_editor_autocmds(bufnr, winid)
   update_placeholder(bufnr)
@@ -564,8 +561,6 @@ function M.open_current_line(range)
       update_layout()
     end
   end)
-
-  vim.cmd("startinsert!")
 end
 
 function M.active_source_line(bufnr)

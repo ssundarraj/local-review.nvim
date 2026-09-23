@@ -5,6 +5,7 @@ local defaults = {
   marker_hl = "LocalReviewMarker",
   storage_dir = vim.fs.joinpath(vim.fn.stdpath("state"), "local-review"),
   keymaps = {},
+  comment_box_width = 80,
   comment_close_keys = {
     { modes = { "n" }, key = "q" },
     { modes = { "n", "i" }, key = "<C-c>" },

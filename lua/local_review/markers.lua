@@ -23,7 +23,15 @@ local function box_width(bufnr)
 
   local win_width = vim.api.nvim_win_get_width(winid)
   local textoff = vim.fn.getwininfo(winid)[1].textoff
-  return math.max(8, win_width - textoff)
+  local available_width = win_width - textoff
+  local configured_width = marker_opts().comment_box_width
+  if type(configured_width) ~= "number" then
+    configured_width = 80
+  end
+
+  -- The configured width describes the editor's content area; include its
+  -- two border cells so the persisted box has the same footprint.
+  return math.max(8, math.min(available_width, math.floor(configured_width) + 2))
 end
 
 local function wrap_line(text, width)
