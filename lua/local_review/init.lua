@@ -6,6 +6,7 @@ local defaults = {
   storage_dir = vim.fs.joinpath(vim.fn.stdpath("state"), "local-review"),
   keymaps = {},
   comment_box_width = 80,
+  show_comment_boxes = false,
   comment_close_keys = {
     { modes = { "n" }, key = "q" },
     { modes = { "n", "i" }, key = "<C-c>" },

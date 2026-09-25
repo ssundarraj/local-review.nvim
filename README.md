@@ -61,6 +61,7 @@ Use your preferred plugin manager. Example with `lazy.nvim`:
       marker_text = "▎",
       marker_hl = "LocalReviewMarker",
       comment_box_width = 80,
+      show_comment_boxes = false, -- set true to always display saved comment bodies
       keymaps = {
         comment = "<leader>rc",
         delete = "<leader>rd",
@@ -111,6 +112,7 @@ end, { desc = "Local Review Picker" })
 ## Notes
 
 - The inline comment editor closes with `q` in normal mode and `<C-c>` in normal or insert mode by default. Configure those bindings through `comment_close_keys`, or remove entries to disable them.
+- Saved comments show gutter markers by default. Set `show_comment_boxes = true` to also display their bodies inline after closing the editor.
 - Comments are stored by scope root: repo root when inside git, otherwise the file's parent directory.
 - Export and clear can target either a file or a directory.
 - This was largely vibe-coded. There is likely some poor code and you may find bugs.

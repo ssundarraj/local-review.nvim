@@ -143,7 +143,7 @@ function M.refresh(bufnr)
         sign_hl_group = opts.marker_hl,
         priority = 10 + index,
       }
-      if line == last and not active and width then
+      if opts.show_comment_boxes and line == last and not active and width then
         mark.virt_lines = comment_virt_lines(comment, width)
         mark.virt_lines_leftcol = false
         mark.hl_mode = "combine"
