@@ -128,7 +128,7 @@ function M.refresh(bufnr)
   local opts = marker_opts()
   local max_line = math.max(vim.api.nvim_buf_line_count(bufnr), 1)
   local active_line = ui.active_source_line(bufnr)
-  local width = box_width(bufnr)
+  local width = require("local_review").boxes_visible() and box_width(bufnr)
 
   for index, comment in ipairs(comments) do
     local first = math.max(1, math.min(comment.anchor.line_number, max_line))
@@ -143,7 +143,7 @@ function M.refresh(bufnr)
         sign_hl_group = opts.marker_hl,
         priority = 10 + index,
       }
-      if opts.show_comment_boxes and line == last and not active and width then
+      if line == last and not active and width then
         mark.virt_lines = comment_virt_lines(comment, width)
         mark.virt_lines_leftcol = false
         mark.hl_mode = "combine"

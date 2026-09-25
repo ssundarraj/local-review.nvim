@@ -6,7 +6,6 @@ local defaults = {
   storage_dir = vim.fs.joinpath(vim.fn.stdpath("state"), "local-review"),
   keymaps = {},
   comment_box_width = 80,
-  show_comment_boxes = false,
   comment_close_keys = {
     { modes = { "n" }, key = "q" },
     { modes = { "n", "i" }, key = "<C-c>" },
@@ -15,6 +14,7 @@ local defaults = {
 
 local state = {
   configured = false,
+  boxes_visible = true,
   opts = vim.deepcopy(defaults),
 }
 
@@ -80,6 +80,24 @@ local function list_comments(path)
   vim.cmd("copen")
 end
 
+function M.boxes_visible()
+  return state.boxes_visible
+end
+
+function M.toggle()
+  -- Finish an active edit before hiding all boxes; keep them visible if saving fails.
+  if state.boxes_visible and not require("local_review.ui").close_active() then
+    return
+  end
+
+  state.boxes_visible = not state.boxes_visible
+  for _, bufnr in ipairs(vim.api.nvim_list_bufs()) do
+    if vim.api.nvim_buf_is_loaded(bufnr) then
+      refresh_current_buffer(bufnr)
+    end
+  end
+end
+
 function M.setup(opts)
   state.opts = vim.tbl_deep_extend("force", vim.deepcopy(defaults), opts or {})
 
@@ -103,6 +121,10 @@ function M.setup(opts)
 
     command("LocalReviewDelete", function()
       require("local_review.comments").delete_current_line()
+    end, {})
+
+    command("LocalReviewToggle", function()
+      M.toggle()
     end, {})
 
     command("LocalReviewNext", function()
@@ -145,6 +167,7 @@ function M.setup(opts)
   map({ "n", "x" }, state.opts.keymaps.prev, visual_safe_cmd("LocalReviewPrev"), "Local Review: Prev")
   map({ "n", "x" }, state.opts.keymaps.export, visual_safe_cmd("LocalReviewExport"), "Local Review: Export")
   map({ "n", "x" }, state.opts.keymaps.list, visual_safe_cmd("LocalReviewList"), "Local Review: List")
+  map({ "n", "x" }, state.opts.keymaps.toggle, visual_safe_cmd("LocalReviewToggle"), "Local Review: Toggle Boxes")
 end
 
 function M.get_opts()

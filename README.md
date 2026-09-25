@@ -61,7 +61,6 @@ Use your preferred plugin manager. Example with `lazy.nvim`:
       marker_text = "▎",
       marker_hl = "LocalReviewMarker",
       comment_box_width = 80,
-      show_comment_boxes = false, -- set true to always display saved comment bodies
       keymaps = {
         comment = "<leader>rc",
         delete = "<leader>rd",
@@ -69,6 +68,7 @@ Use your preferred plugin manager. Example with `lazy.nvim`:
         prev = "[r",
         export = "<leader>re",
         list = "<leader>rl",
+        toggle = "<leader>rt",
       },
       comment_close_keys = {
         { modes = { "n" }, key = "q" },
@@ -97,6 +97,7 @@ end, { desc = "Local Review Picker" })
 
 - `:LocalReviewComment` open the comment editor for the current line
 - `:LocalReviewDelete` delete the comment on the current line
+- `:LocalReviewToggle` show or hide all saved comment boxes across buffers and tabs, keeping gutter markers visible
 - `:LocalReviewNext` jump to the next review comment in the current file
 - `:LocalReviewPrev` jump to the previous review comment in the current file
 - `:LocalReviewExport [path]` print review comments for a path in a copy/paste-friendly format, then delete the exported comments. If path is omitted, it uses the current repo root when available, otherwise `cwd`.
@@ -112,7 +113,7 @@ end, { desc = "Local Review Picker" })
 ## Notes
 
 - The inline comment editor closes with `q` in normal mode and `<C-c>` in normal or insert mode by default. Configure those bindings through `comment_close_keys`, or remove entries to disable them.
-- Saved comments show gutter markers by default. Set `show_comment_boxes = true` to also display their bodies inline after closing the editor.
+- Saved comment boxes are visible by default. Use `:LocalReviewToggle` (or configure `keymaps.toggle`) to hide or show them for the current Neovim session. Hiding saves and closes an active comment editor; comments and gutter markers are preserved. You can still explicitly open a comment editor while saved boxes are hidden.
 - Comments are stored by scope root: repo root when inside git, otherwise the file's parent directory.
 - Export and clear can target either a file or a directory.
 - This was largely vibe-coded. There is likely some poor code and you may find bugs.
