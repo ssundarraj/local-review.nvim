@@ -135,7 +135,7 @@ function M.refresh(bufnr)
     local last = math.max(first, math.min(comment.line_end or comment.anchor.line_number, max_line))
     local active = active_line ~= nil and active_line >= first and active_line <= last
 
-    -- Git-style gutter bar on every commented line; the comment box is drawn
+    -- Gutter marker on every commented line; the comment box is drawn
     -- below the last line of the range.
     for line = first, last do
       local mark = {

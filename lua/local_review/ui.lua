@@ -235,8 +235,21 @@ local function inline_dimensions(lines, source_winid, anchor_row)
   local width = math.min(configured_width(), available_width)
 
   local row = anchor_row or (vim.fn.winline() + 1)
-  local available_height = math.max(6, vim.api.nvim_win_get_height(source_winid) - row - 1)
-  local height = math.min(math.max(1, content_height(lines)), available_height)
+  local source_height = vim.api.nvim_win_get_height(source_winid)
+  local available_height = math.max(1, math.min(source_height - border_width, math.max(6, source_height - row - 1)))
+  -- Measure rendered rows at the new width, including word wrapping, tabs,
+  -- and wide characters. Logical line count alone clips long comments.
+  local text_height = content_height(lines)
+  if is_valid_window(state.editor_winid) then
+    if vim.api.nvim_win_get_width(state.editor_winid) ~= width then
+      vim.api.nvim_win_set_width(state.editor_winid, width)
+    end
+    text_height = vim.api.nvim_win_text_height(state.editor_winid, {
+      start_row = 0,
+      end_row = text_height - 1,
+    }).all
+  end
+  local height = math.min(math.max(3, text_height), available_height)
 
   return {
     width = width,
@@ -251,6 +264,7 @@ local function reserve_inline_space(bufnr, line, height)
   end
 
   state.extmark_id = vim.api.nvim_buf_set_extmark(bufnr, namespace, line - 1, 0, {
+    id = state.extmark_id,
     virt_lines = virt_lines,
     virt_lines_leftcol = true,
     hl_mode = "combine",
@@ -318,6 +332,10 @@ local function update_layout()
     return
   end
 
+  -- Recompute the anchor after source-window resizing or scrolling.
+  state.anchor_row = vim.api.nvim_win_call(state.source_winid, function()
+    return vim.fn.winline()
+  end)
   local size = inline_dimensions(
     vim.api.nvim_buf_get_lines(state.editor_bufnr, 0, -1, false),
     state.source_winid,
@@ -325,8 +343,9 @@ local function update_layout()
   )
   local reserved_height = size.height + 2
 
-  clear_inline_space()
-  reserve_inline_space(state.source_bufnr, state.source_line, reserved_height)
+  if state.reserved_height ~= reserved_height then
+    reserve_inline_space(state.source_bufnr, state.source_line, reserved_height)
+  end
 
   place_editor(state.editor_winid, {
     relative = "win",
@@ -336,6 +355,20 @@ local function update_layout()
     width = size.width,
     height = size.height,
   })
+
+  -- Growing the float does not undo scrolling caused by typing in its old,
+  -- smaller viewport. Reveal the whole comment again whenever it now fits.
+  if vim.api.nvim_win_text_height(state.editor_winid, {}).all <= size.height then
+    vim.api.nvim_win_call(state.editor_winid, function()
+      local view = vim.fn.winsaveview()
+      if view.topline ~= 1 or view.skipcol ~= 0 then
+        view.topline = 1
+        view.topfill = 0
+        view.skipcol = 0
+        vim.fn.winrestview(view)
+      end
+    end)
+  end
 end
 
 local function set_editor_keymaps(bufnr)
@@ -394,12 +427,29 @@ end
 local function attach_editor_autocmds(bufnr, winid)
   local group = vim.api.nvim_create_augroup("local-review-inline-" .. bufnr, { clear = true })
 
-  vim.api.nvim_create_autocmd({ "TextChanged", "TextChangedI", "InsertLeave", "BufEnter" }, {
+  vim.api.nvim_create_autocmd({
+    "TextChanged",
+    "TextChangedI",
+    "TextChangedP",
+    "InsertLeave",
+    "BufEnter",
+    "CursorMoved",
+    "CursorMovedI",
+  }, {
     group = group,
     buffer = bufnr,
     callback = function()
       update_placeholder(bufnr)
       update_layout()
+    end,
+  })
+
+  vim.api.nvim_create_autocmd({ "VimResized", "WinResized", "WinScrolled" }, {
+    group = group,
+    callback = function()
+      if state.editor_winid == winid and is_valid_window(winid) then
+        update_layout()
+      end
     end,
   })
 

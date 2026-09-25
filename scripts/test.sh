@@ -16,3 +16,4 @@ busted tests/positioning_spec.lua
 nvim --headless --clean -u NONE -l tests/lww_smoke.lua
 nvim --headless --clean -u NONE -l tests/tombstone_smoke.lua
 nvim --headless --clean -u NONE -l tests/panel_smoke.lua
+nvim --headless --clean -u NONE -l tests/resize_smoke.lua

@@ -58,8 +58,8 @@ Use your preferred plugin manager. Example with `lazy.nvim`:
   "ssundarraj/local-review.nvim",
   config = function()
     require("local_review").setup({
-      marker_text = "▎",
-      marker_hl = "LocalReviewMarker",
+      marker_text = "●",
+      marker_hl = "DiagnosticHint",
       comment_box_width = 80,
       keymaps = {
         comment = "<leader>rc",
@@ -113,7 +113,8 @@ end, { desc = "Local Review Picker" })
 ## Notes
 
 - The inline comment editor closes with `q` in normal mode and `<C-c>` in normal or insert mode by default. Configure those bindings through `comment_close_keys`, or remove entries to disable them.
-- Saved comment boxes are visible by default. Use `:LocalReviewToggle` (or configure `keymaps.toggle`) to hide or show them for the current Neovim session. Hiding saves and closes an active comment editor; comments and gutter markers are preserved. You can still explicitly open a comment editor while saved boxes are hidden.
+- Saved comment boxes are collapsed by default, with a `●` gutter marker on each commented line. Use `:LocalReviewToggle` (or configure `keymaps.toggle`) to show or hide all saved boxes for the current Neovim session. Hiding saves and closes an active comment editor; comments and gutter markers are preserved. You can still explicitly open a comment editor while saved boxes are hidden.
+- The comment editor grows and shrinks with its text, including wrapped lines, and responds to window resizing. It starts at three rows and caps its height to the available space.
 - Comments are stored by scope root: repo root when inside git, otherwise the file's parent directory.
 - Export and clear can target either a file or a directory.
 - This was largely vibe-coded. There is likely some poor code and you may find bugs.

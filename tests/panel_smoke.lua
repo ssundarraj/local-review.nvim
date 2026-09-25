@@ -27,6 +27,8 @@ local function check_marks(bufnr, expected_boxes)
   assert(#marks == 3, "all three lines must retain gutter markers")
   local boxes = 0
   for _, mark in ipairs(marks) do
+    assert(vim.trim(mark[4].sign_text) == "●", "restore the original dot marker")
+    assert(mark[4].sign_hl_group == "DiagnosticHint", "restore the original marker highlight")
     if mark[4].virt_lines and #mark[4].virt_lines > 0 then
       boxes = boxes + 1
     end
@@ -41,7 +43,10 @@ local function check_all(expected_boxes)
   end
 end
 
--- Default to visible, then hide every buffer including an inactive tab.
+-- Default to collapsed, then toggle every buffer including an inactive tab.
+assert(not review.boxes_visible())
+check_all(0)
+vim.cmd.LocalReviewToggle()
 check_all(1)
 vim.cmd.LocalReviewToggle()
 assert(not review.boxes_visible())

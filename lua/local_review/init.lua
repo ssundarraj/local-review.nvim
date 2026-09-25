@@ -1,8 +1,8 @@
 local M = {}
 
 local defaults = {
-  marker_text = "▎",
-  marker_hl = "LocalReviewMarker",
+  marker_text = "●",
+  marker_hl = "DiagnosticHint",
   storage_dir = vim.fs.joinpath(vim.fn.stdpath("state"), "local-review"),
   keymaps = {},
   comment_box_width = 80,
@@ -14,7 +14,7 @@ local defaults = {
 
 local state = {
   configured = false,
-  boxes_visible = true,
+  boxes_visible = false,
   opts = vim.deepcopy(defaults),
 }
 
@@ -101,9 +101,8 @@ end
 function M.setup(opts)
   state.opts = vim.tbl_deep_extend("force", vim.deepcopy(defaults), opts or {})
 
-  -- Gutter marker for commented lines. Linked to an info-style group (blue in
-  -- most colorschemes); override with :highlight to customize. The group name
-  -- doubles as the sign name for statuscolumn plugins.
+  -- Keep the optional blue highlight available for custom marker settings.
+  -- The default dot uses DiagnosticHint, as before range comments were added.
   vim.api.nvim_set_hl(0, "LocalReviewMarker", { link = "DiagnosticInfo", default = true })
 
   -- Title of the comment box while creating/editing. Linked to a group that
@@ -151,10 +150,22 @@ function M.setup(opts)
       list_comments(command_opts.args)
     end, { nargs = "?" })
 
-    vim.api.nvim_create_autocmd({ "BufEnter", "BufReadPost", "BufWritePost", "FileChangedShellPost", "VimResized" }, {
-      group = vim.api.nvim_create_augroup("local-review-refresh", { clear = true }),
+    local refresh_group = vim.api.nvim_create_augroup("local-review-refresh", { clear = true })
+    vim.api.nvim_create_autocmd({ "BufEnter", "BufReadPost", "BufWritePost", "FileChangedShellPost" }, {
+      group = refresh_group,
       callback = function(event)
         refresh_current_buffer(event.buf)
+      end,
+    })
+
+    vim.api.nvim_create_autocmd({ "VimResized", "WinResized" }, {
+      group = refresh_group,
+      callback = function()
+        for _, bufnr in ipairs(vim.api.nvim_list_bufs()) do
+          if vim.api.nvim_buf_is_loaded(bufnr) then
+            refresh_current_buffer(bufnr)
+          end
+        end
       end,
     })
 
